@@ -1,0 +1,145 @@
+# nonk8s
+apiVersion: zeabur.com/v1
+kind: Template
+metadata:
+  name: new-api
+spec:
+  description: Deploy new-api on Zeabur with PostgreSQL and Redis.
+  icon: https://raw.githubusercontent.com/U29kaXVt/new-api-leinao/main/web/public/logo.png
+  coverImage: https://raw.githubusercontent.com/U29kaXVt/new-api-leinao/main/web/public/cover-4.webp
+  tags:
+    - AI
+    - Go
+    - React
+    - PostgreSQL
+    - Redis
+  readme: |-
+    This template deploys:
+    - `new-api` built from this repository's `personal/dev` branch
+    - PostgreSQL 15
+    - Redis 7
+
+    Notes:
+    - The app service is built from the repo Dockerfile, so your branch changes are included.
+    - Push the `personal/dev` branch to GitHub before importing this template into Zeabur.
+    - `SESSION_SECRET` must be changed before production use.
+    - If you later deploy a different branch, update `services[].source.branch`.
+    - If you want SQLite only, you can remove PostgreSQL/Redis and keep the `/data` volume on the app service.
+  variables:
+    - key: PUBLIC_DOMAIN
+      type: DOMAIN
+      name: Public Domain
+      description: Domain used to access the new-api web UI.
+    - key: SESSION_SECRET
+      type: STRING
+      name: Session Secret
+      description: Session signing key. Change this to a random string before production use.
+      default: change-me-to-a-random-string
+    - key: POSTGRES_PASSWORD
+      type: STRING
+      name: PostgreSQL Password
+      description: Password for the PostgreSQL root user.
+      default: change-me-postgres-password
+    - key: TZ
+      type: STRING
+      name: Time Zone
+      description: Time zone used by the application container.
+      default: Asia/Shanghai
+  services:
+    - name: new-api
+      icon: https://raw.githubusercontent.com/U29kaXVt/new-api-leinao/main/web/public/logo.png
+      template: GIT
+      domainKey: PUBLIC_DOMAIN
+      dependencies:
+        - postgres
+        - redis
+      spec:
+        source:
+          type: GITHUB
+          repoID: 1204609002
+          branch: personal/dev
+        ports:
+          - id: web
+            port: 3000
+            type: HTTP
+        volumes:
+          - id: app-data
+            dir: /data
+        env:
+          PORT:
+            default: "3000"
+          TZ:
+            default: ${TZ}
+          SESSION_SECRET:
+            default: ${SESSION_SECRET}
+          SQL_DSN:
+            default: ${POSTGRES_URI}
+          REDIS_CONN_STRING:
+            default: ${REDIS_URI}
+          ERROR_LOG_ENABLED:
+            default: "true"
+          BATCH_UPDATE_ENABLED:
+            default: "true"
+    - name: postgres
+      icon: https://raw.githubusercontent.com/zeabur/service-icons/main/marketplace/postgresql.svg
+      template: PREBUILT
+      spec:
+        source:
+          image: postgres:15
+        ports:
+          - id: database
+            port: 5432
+            type: TCP
+        volumes:
+          - id: pg-data
+            dir: /var/lib/postgresql/data
+        env:
+          POSTGRES_USER:
+            default: root
+            expose: true
+            readonly: true
+          POSTGRES_PASSWORD:
+            default: ${POSTGRES_PASSWORD}
+            expose: true
+          POSTGRES_DB:
+            default: new-api
+            expose: true
+            readonly: true
+          POSTGRES_HOST:
+            default: ${CONTAINER_HOSTNAME}
+            expose: true
+            readonly: true
+          POSTGRES_PORT:
+            default: ${DATABASE_PORT}
+            expose: true
+            readonly: true
+          POSTGRES_URI:
+            default: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+            expose: true
+            readonly: true
+    - name: redis
+      icon: https://raw.githubusercontent.com/zeabur/service-icons/main/marketplace/redis.svg
+      template: PREBUILT
+      spec:
+        source:
+          image: redis:7-alpine
+        ports:
+          - id: database
+            port: 6379
+            type: TCP
+        volumes:
+          - id: redis-data
+            dir: /data
+        env:
+          REDIS_HOST:
+            default: ${CONTAINER_HOSTNAME}
+            expose: true
+            readonly: true
+          REDIS_PORT:
+            default: ${DATABASE_PORT}
+            expose: true
+            readonly: true
+          REDIS_URI:
+            default: redis://${REDIS_HOST}:${REDIS_PORT}
+            expose: true
+            readonly: true
