@@ -35,10 +35,6 @@ spec:
       type: PASSWORD
       name: Session Secret
       description: Session signing key. Change this to a random string before production use.
-    - key: POSTGRES_PASSWORD
-      type: PASSWORD
-      name: PostgreSQL Password
-      description: Password for the PostgreSQL root user.
   services:
     - name: new-api
       icon: https://raw.githubusercontent.com/U29kaXVt/new-api-leinao/main/web/public/logo.png
@@ -74,6 +70,8 @@ spec:
             default: "true"
           BATCH_UPDATE_ENABLED:
             default: "true"
+          STREAMING_TIMEOUT:
+            default: "600"
     - name: postgres
       icon: https://raw.githubusercontent.com/zeabur/service-icons/main/marketplace/postgresql.svg
       template: PREBUILT
@@ -92,7 +90,7 @@ spec:
             default: root
             expose: true
           POSTGRES_PASSWORD:
-            default: ${POSTGRES_PASSWORD}
+            default: ${PASSWORD}
             expose: true
           POSTGRES_DB:
             default: new-api
@@ -104,7 +102,7 @@ spec:
             default: ${DATABASE_PORT}
             expose: true
           POSTGRES_URI:
-            default: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+            default: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable
             expose: true
     - name: redis
       icon: https://raw.githubusercontent.com/zeabur/service-icons/main/marketplace/redis.svg
