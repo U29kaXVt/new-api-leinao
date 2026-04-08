@@ -268,15 +268,34 @@ async function prepareOAuthState(options = {}) {
   return await getOAuthState();
 }
 
-export async function onDiscordOAuthClicked(client_id, options = {}) {
+export async function onDiscordOAuthClicked(
+  client_id,
+  scopesOrOptions = {},
+  maybeOptions = {},
+) {
+  let scopes = 'identify openid guilds.members.read';
+  let options = maybeOptions;
+
+  if (typeof scopesOrOptions === 'string') {
+    scopes = scopesOrOptions || scopes;
+  } else if (scopesOrOptions && typeof scopesOrOptions === 'object') {
+    options = scopesOrOptions;
+  }
+
   const state = await prepareOAuthState(options);
   if (!state) return;
-  const redirect_uri = `${window.location.origin}/oauth/discord`;
-  const response_type = 'code';
-  const scope = 'identify+openid';
-  redirectToOAuthUrl(
-    `https://discord.com/oauth2/authorize?client_id=${client_id}&redirect_uri=${redirect_uri}&response_type=${response_type}&scope=${scope}&state=${state}`,
+
+  const authUrl = new URL('https://discord.com/oauth2/authorize');
+  authUrl.searchParams.set('client_id', client_id);
+  authUrl.searchParams.set(
+    'redirect_uri',
+    `${window.location.origin}/oauth/discord`,
   );
+  authUrl.searchParams.set('response_type', 'code');
+  authUrl.searchParams.set('scope', scopes);
+  authUrl.searchParams.set('state', state);
+
+  redirectToOAuthUrl(authUrl);
 }
 
 export async function onOIDCClicked(

@@ -139,6 +139,29 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
+	case "discord.access_rules":
+		var rules []system_setting.DiscordAccessRule
+		if strings.TrimSpace(option.Value.(string)) == "" {
+			option.Value = "[]"
+			break
+		}
+		err = common.UnmarshalJsonStr(option.Value.(string), &rules)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "Discord 访问规则 JSON 格式无效，请检查后重试",
+			})
+			return
+		}
+		for _, rule := range rules {
+			if strings.TrimSpace(rule.GuildID) == "" {
+				c.JSON(http.StatusOK, gin.H{
+					"success": false,
+					"message": "Discord 访问规则中的 guild_id 不能为空",
+				})
+				return
+			}
+		}
 	case "oidc.enabled":
 		if option.Value == "true" && system_setting.GetOIDCSettings().ClientId == "" {
 			c.JSON(http.StatusOK, gin.H{

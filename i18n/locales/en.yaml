@@ -235,6 +235,10 @@ oauth.connect_failed: "Unable to connect to {{.Provider}} server, please try aga
 oauth.token_failed: "Failed to get token from {{.Provider}}, please check settings"
 oauth.user_info_empty: "{{.Provider}} returned empty user info, please check settings"
 oauth.trust_level_low: "Linux DO trust level does not meet the minimum required by administrator"
+oauth.discord_guild_required: "Your Discord account must join one of the required servers before login or registration is allowed"
+oauth.discord_role_required: "Your Discord account must have one of the required roles before login or registration is allowed"
+oauth.discord_member_scope_required: "Discord authorization is missing the guild member read permission. Please authorize again and retry"
+oauth.discord_access_config_invalid: "Discord access restriction settings are invalid. Please contact the administrator"
 
 # Model layer error messages
 redeem.failed: "Redemption failed, please try again later"

@@ -340,15 +340,18 @@ const AccountManagement = ({
                     </div>
                   </div>
                   <div className='flex-shrink-0'>
-                    <Button
-                      type='primary'
-                      theme='outline'
-                      size='small'
-                      onClick={() =>
-                        onDiscordOAuthClicked(status.discord_client_id)
-                      }
-                      disabled={
-                        isBound(userState.user?.discord_id) ||
+                      <Button
+                        type='primary'
+                        theme='outline'
+                        size='small'
+                        onClick={() =>
+                          onDiscordOAuthClicked(
+                            status.discord_client_id,
+                            status.discord_oauth_scopes,
+                          )
+                        }
+                        disabled={
+                          isBound(userState.user?.discord_id) ||
                         !status.discord_oauth
                       }
                     >

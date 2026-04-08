@@ -304,7 +304,11 @@ const RegisterForm = () => {
   const handleDiscordClick = () => {
     setDiscordLoading(true);
     try {
-      onDiscordOAuthClicked(status.discord_client_id, { shouldLogout: true });
+      onDiscordOAuthClicked(
+        status.discord_client_id,
+        status.discord_oauth_scopes,
+        { shouldLogout: true },
+      );
     } finally {
       setTimeout(() => setDiscordLoading(false), 3000);
     }

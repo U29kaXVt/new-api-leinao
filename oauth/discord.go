@@ -2,13 +2,13 @@ package oauth
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
@@ -36,6 +36,10 @@ type discordUser struct {
 	UID  string `json:"id"`
 	ID   string `json:"username"`
 	Name string `json:"global_name"`
+}
+
+type discordGuildMember struct {
+	Roles []string `json:"roles"`
 }
 
 func (p *DiscordProvider) GetName() string {
@@ -84,7 +88,7 @@ func (p *DiscordProvider) ExchangeToken(ctx context.Context, code string, c *gin
 	logger.LogDebug(ctx, "[OAuth-Discord] ExchangeToken response status: %d", res.StatusCode)
 
 	var discordResponse discordOAuthResponse
-	err = json.NewDecoder(res.Body).Decode(&discordResponse)
+	err = common.DecodeJson(res.Body, &discordResponse)
 	if err != nil {
 		logger.LogError(ctx, fmt.Sprintf("[OAuth-Discord] ExchangeToken decode error: %s", err.Error()))
 		return nil, err
@@ -134,7 +138,7 @@ func (p *DiscordProvider) GetUserInfo(ctx context.Context, token *OAuthToken) (*
 	}
 
 	var discordUser discordUser
-	err = json.NewDecoder(res.Body).Decode(&discordUser)
+	err = common.DecodeJson(res.Body, &discordUser)
 	if err != nil {
 		logger.LogError(ctx, fmt.Sprintf("[OAuth-Discord] GetUserInfo decode error: %s", err.Error()))
 		return nil, err
@@ -143,6 +147,10 @@ func (p *DiscordProvider) GetUserInfo(ctx context.Context, token *OAuthToken) (*
 	if discordUser.UID == "" || discordUser.ID == "" {
 		logger.LogError(ctx, "[OAuth-Discord] GetUserInfo failed: empty user fields")
 		return nil, NewOAuthError(i18n.MsgOAuthUserInfoEmpty, map[string]any{"Provider": "Discord"})
+	}
+
+	if err := p.validateAccess(ctx, token, &discordUser); err != nil {
+		return nil, err
 	}
 
 	logger.LogDebug(ctx, "[OAuth-Discord] GetUserInfo success: uid=%s, username=%s, name=%s", discordUser.UID, discordUser.ID, discordUser.Name)
@@ -169,4 +177,108 @@ func (p *DiscordProvider) SetProviderUserID(user *model.User, providerUserID str
 
 func (p *DiscordProvider) GetProviderPrefix() string {
 	return "discord_"
+}
+
+func (p *DiscordProvider) validateAccess(ctx context.Context, token *OAuthToken, user *discordUser) error {
+	settings := system_setting.GetDiscordSettings()
+	rules := settings.GetAccessRules()
+	if len(rules) == 0 {
+		return nil
+	}
+
+	client := http.Client{Timeout: 5 * time.Second}
+	memberMatched := false
+
+	for _, rule := range rules {
+		member, err := p.getCurrentGuildMember(ctx, &client, token.AccessToken, rule.GuildID)
+		if err != nil {
+			if _, ok := err.(*discordGuildNotFoundError); ok {
+				logger.LogDebug(ctx, fmt.Sprintf("[OAuth-Discord] user %s is not in guild %s", user.UID, rule.GuildID))
+				continue
+			}
+			return err
+		}
+
+		memberMatched = true
+		if len(rule.RoleIDs) == 0 {
+			logger.LogDebug(ctx, fmt.Sprintf("[OAuth-Discord] access granted by guild membership: user=%s guild=%s", user.UID, rule.GuildID))
+			return nil
+		}
+
+		if hasAnyDiscordRole(member.Roles, rule.RoleIDs) {
+			logger.LogDebug(ctx, fmt.Sprintf("[OAuth-Discord] access granted by role match: user=%s guild=%s", user.UID, rule.GuildID))
+			return nil
+		}
+	}
+
+	if !memberMatched {
+		logger.LogWarn(ctx, fmt.Sprintf("[OAuth-Discord] access denied: user=%s is not in any allowed guild", user.UID))
+		return NewOAuthError(i18n.MsgOAuthDiscordGuildRequired, nil)
+	}
+
+	logger.LogWarn(ctx, fmt.Sprintf("[OAuth-Discord] access denied: user=%s missing all required roles", user.UID))
+	return NewOAuthError(i18n.MsgOAuthDiscordRoleRequired, nil)
+}
+
+type discordGuildNotFoundError struct{}
+
+func (e *discordGuildNotFoundError) Error() string {
+	return "discord guild member not found"
+}
+
+func hasAnyDiscordRole(userRoleIDs []string, allowedRoleIDs []string) bool {
+	roleSet := make(map[string]struct{}, len(userRoleIDs))
+	for _, roleID := range userRoleIDs {
+		trimmed := strings.TrimSpace(roleID)
+		if trimmed == "" {
+			continue
+		}
+		roleSet[trimmed] = struct{}{}
+	}
+	for _, roleID := range allowedRoleIDs {
+		if _, ok := roleSet[strings.TrimSpace(roleID)]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *DiscordProvider) getCurrentGuildMember(ctx context.Context, client *http.Client, accessToken string, guildID string) (*discordGuildMember, error) {
+	memberEndpoint := fmt.Sprintf("https://discord.com/api/v10/users/@me/guilds/%s/member", guildID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, memberEndpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/json")
+
+	res, err := client.Do(req)
+	if err != nil {
+		logger.LogError(ctx, fmt.Sprintf("[OAuth-Discord] GetCurrentGuildMember error: guild=%s err=%s", guildID, err.Error()))
+		return nil, NewOAuthErrorWithRaw(i18n.MsgOAuthConnectFailed, map[string]any{"Provider": "Discord"}, err.Error())
+	}
+	defer res.Body.Close()
+
+	logger.LogDebug(ctx, fmt.Sprintf("[OAuth-Discord] GetCurrentGuildMember response: guild=%s status=%d", guildID, res.StatusCode))
+
+	switch res.StatusCode {
+	case http.StatusOK:
+		var member discordGuildMember
+		if err := common.DecodeJson(res.Body, &member); err != nil {
+			logger.LogError(ctx, fmt.Sprintf("[OAuth-Discord] GetCurrentGuildMember decode error: guild=%s err=%s", guildID, err.Error()))
+			return nil, err
+		}
+		return &member, nil
+	case http.StatusNotFound:
+		return nil, &discordGuildNotFoundError{}
+	case http.StatusForbidden:
+		logger.LogWarn(ctx, fmt.Sprintf("[OAuth-Discord] GetCurrentGuildMember forbidden: guild=%s", guildID))
+		return nil, NewOAuthError(i18n.MsgOAuthDiscordMemberScopeRequired, nil)
+	case http.StatusUnauthorized:
+		logger.LogWarn(ctx, fmt.Sprintf("[OAuth-Discord] GetCurrentGuildMember unauthorized: guild=%s", guildID))
+		return nil, NewOAuthError(i18n.MsgOAuthTokenFailed, map[string]any{"Provider": "Discord"})
+	default:
+		logger.LogError(ctx, fmt.Sprintf("[OAuth-Discord] GetCurrentGuildMember failed: guild=%s status=%d", guildID, res.StatusCode))
+		return nil, NewOAuthError(i18n.MsgOAuthGetUserErr, map[string]any{"Provider": "Discord"})
+	}
 }

@@ -31,7 +31,10 @@ import {
   Card,
   Radio,
   Select,
+  Input,
+  Popconfirm,
 } from '@douyinfe/semi-ui';
+import { IconDelete, IconPlus } from '@douyinfe/semi-icons';
 const { Text } = Typography;
 import {
   API,
@@ -43,6 +46,65 @@ import {
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import CustomOAuthSetting from './CustomOAuthSetting';
+
+let discordRuleIdCounter = 0;
+
+const nextDiscordRuleId = () => `discord_rule_${++discordRuleIdCounter}`;
+const nextDiscordRoleId = () => `discord_role_${++discordRuleIdCounter}`;
+
+const createDiscordRoleEntry = (value = '') => ({
+  _id: nextDiscordRoleId(),
+  value,
+});
+
+const createDiscordRuleEntry = (guildId = '', roleIds = []) => ({
+  _id: nextDiscordRuleId(),
+  guild_id: guildId,
+  role_ids: Array.isArray(roleIds)
+    ? roleIds.map((item) => createDiscordRoleEntry(item))
+    : [],
+});
+
+const parseDiscordAccessRules = (value) => {
+  if (!value || !String(value).trim()) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.map((item) =>
+      createDiscordRuleEntry(item?.guild_id || '', item?.role_ids || []),
+    );
+  } catch {
+    return [];
+  }
+};
+
+const serializeDiscordAccessRules = (rules) => {
+  const normalizedRules = Array.isArray(rules)
+    ? rules.map((rule) => ({
+        guild_id: String(rule?.guild_id || '').trim(),
+        role_ids: Array.isArray(rule?.role_ids)
+          ? [
+              ...new Set(
+                rule.role_ids
+                  .map((role) =>
+                    typeof role === 'string'
+                      ? role.trim()
+                      : String(role?.value || '').trim(),
+                  )
+                  .filter((role) => role.length > 0),
+              ),
+            ]
+          : [],
+      }))
+    : [];
+
+  return JSON.stringify(normalizedRules);
+};
 
 const SystemSetting = () => {
   const { t } = useTranslation();
@@ -56,6 +118,7 @@ const SystemSetting = () => {
     'discord.enabled': '',
     'discord.client_id': '',
     'discord.client_secret': '',
+    'discord.access_rules': '[]',
     'oidc.enabled': '',
     'oidc.client_id': '',
     'oidc.client_secret': '',
@@ -125,6 +188,7 @@ const SystemSetting = () => {
   const [domainList, setDomainList] = useState([]);
   const [ipList, setIpList] = useState([]);
   const [allowedPorts, setAllowedPorts] = useState([]);
+  const [discordAccessRules, setDiscordAccessRules] = useState([]);
 
   const getOptions = async () => {
     setLoading(true);
@@ -146,6 +210,10 @@ const SystemSetting = () => {
           case 'fetch_setting.ip_filter_mode':
           case 'fetch_setting.apply_ip_filter_for_domain':
             item.value = toBoolean(item.value);
+            break;
+          case 'discord.access_rules':
+            setDiscordAccessRules(parseDiscordAccessRules(item.value || '[]'));
+            item.value = item.value || '[]';
             break;
           case 'fetch_setting.domain_list':
             try {
@@ -497,10 +565,75 @@ const SystemSetting = () => {
         value: inputs['discord.client_secret'],
       });
     }
+    const normalizedRules = discordAccessRules.map((rule) => ({
+      guild_id: String(rule.guild_id || '').trim(),
+      role_ids: [
+        ...new Set(
+          (rule.role_ids || [])
+            .map((role) =>
+              typeof role === 'string'
+                ? role.trim()
+                : String(role?.value || '').trim(),
+            )
+            .filter((role) => role.length > 0),
+        ),
+      ],
+    }));
+    if (normalizedRules.some((rule) => rule.guild_id.length === 0)) {
+      showError(t('Discord 服务器 ID 不能为空'));
+      return;
+    }
+    const serializedAccessRules = JSON.stringify(normalizedRules);
+    const normalizedOriginAccessRules = (() => {
+      try {
+        return JSON.stringify(
+          JSON.parse(originInputs['discord.access_rules'] || '[]'),
+        );
+      } catch {
+        return '[]';
+      }
+    })();
+    if (normalizedOriginAccessRules !== serializedAccessRules) {
+      options.push({
+        key: 'discord.access_rules',
+        value: serializedAccessRules,
+      });
+    }
 
     if (options.length > 0) {
       await updateOptions(options);
     }
+  };
+
+  const addDiscordAccessRule = () => {
+    setDiscordAccessRules((prev) => [...prev, createDiscordRuleEntry()]);
+  };
+
+  const removeDiscordAccessRule = (id) => {
+    setDiscordAccessRules((prev) => prev.filter((rule) => rule._id !== id));
+  };
+
+  const updateDiscordAccessRuleGuild = (id, value) => {
+    setDiscordAccessRules((prev) =>
+      prev.map((rule) =>
+        rule._id === id ? { ...rule, guild_id: value } : rule,
+      ),
+    );
+  };
+
+  const updateDiscordAccessRuleRoles = (id, values) => {
+    setDiscordAccessRules((prev) =>
+      prev.map((rule) =>
+        rule._id === id
+          ? {
+              ...rule,
+              role_ids: (values || []).map((value) =>
+                createDiscordRoleEntry(String(value)),
+              ),
+            }
+          : rule,
+      ),
+    );
   };
 
   const submitOIDCSettings = async () => {
@@ -1475,6 +1608,94 @@ const SystemSetting = () => {
                       />
                     </Col>
                   </Row>
+                  <div style={{ marginBottom: 16 }}>
+                    <Text strong>{t('Discord 访问规则')}</Text>
+                    <Text
+                      type='tertiary'
+                      style={{ display: 'block', marginTop: 8, marginBottom: 12 }}
+                    >
+                      {t(
+                        '每条规则绑定一个服务器。若该服务器未填写身份组，则加入该服务器即可登录；若填写了身份组，则必须拥有该服务器中的其中一个身份组才允许登录。',
+                      )}
+                    </Text>
+                    {discordAccessRules.length === 0 ? (
+                      <div
+                        style={{
+                          border: '1px dashed var(--semi-color-border)',
+                          borderRadius: 12,
+                          padding: 16,
+                          marginBottom: 12,
+                        }}
+                      >
+                        <Text type='tertiary'>
+                          {t('当前未配置 Discord 访问规则，表示不限制服务器和身份组')}
+                        </Text>
+                      </div>
+                    ) : null}
+                    {discordAccessRules.map((rule, index) => (
+                      <Card
+                        key={rule._id}
+                        style={{ marginBottom: 12 }}
+                        bodyStyle={{ padding: 16 }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: 12,
+                          }}
+                        >
+                          <Text strong>{t('服务器规则')} #{index + 1}</Text>
+                          <Popconfirm
+                            title={t('确认删除这条 Discord 规则？')}
+                            onConfirm={() => removeDiscordAccessRule(rule._id)}
+                            position='left'
+                          >
+                            <Button
+                              icon={<IconDelete />}
+                              type='danger'
+                              theme='borderless'
+                              size='small'
+                            />
+                          </Popconfirm>
+                        </div>
+                        <div style={{ marginBottom: 12 }}>
+                          <Text style={{ display: 'block', marginBottom: 6 }}>
+                            {t('Discord 服务器 ID')}
+                          </Text>
+                          <Input
+                            value={rule.guild_id}
+                            placeholder={t('输入服务器 ID')}
+                            onChange={(value) =>
+                              updateDiscordAccessRuleGuild(rule._id, value)
+                            }
+                          />
+                        </div>
+                        <div>
+                          <Text style={{ display: 'block', marginBottom: 6 }}>
+                            {t('该服务器允许登录的身份组 ID')}
+                          </Text>
+                          <TagInput
+                            value={(rule.role_ids || []).map((role) => role.value)}
+                            placeholder={t(
+                              '输入身份组 ID 后回车，留空表示只校验是否在该服务器',
+                            )}
+                            addOnBlur
+                            saveOnBlur
+                            showClear
+                            onChange={(values) =>
+                              updateDiscordAccessRuleRoles(rule._id, values)
+                            }
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                      </Card>
+                    ))}
+                    <Button icon={<IconPlus />} theme='outline' onClick={addDiscordAccessRule}>
+                      {t('添加服务器规则')}
+                    </Button>
+                  </div>
                   <Button onClick={submitDiscordOAuth}>
                     {t('保存 Discord OAuth 设置')}
                   </Button>
