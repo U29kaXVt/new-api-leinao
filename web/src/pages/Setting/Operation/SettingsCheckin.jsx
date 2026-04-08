@@ -35,6 +35,7 @@ export default function SettingsCheckin(props) {
     'checkin_setting.enabled': false,
     'checkin_setting.min_quota': 1000,
     'checkin_setting.max_quota': 10000,
+    'checkin_setting.max_current_quota': -1,
   });
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
@@ -46,6 +47,15 @@ export default function SettingsCheckin(props) {
   }
 
   function onSubmit() {
+    const minQuota = Number(inputs['checkin_setting.min_quota']);
+    const maxQuota = Number(inputs['checkin_setting.max_quota']);
+    const maxCurrentQuota = Number(inputs['checkin_setting.max_current_quota']);
+    if (minQuota > maxQuota) {
+      return showError(t('签到最小额度不能大于签到最大额度'));
+    }
+    if (maxCurrentQuota < -1) {
+      return showError(t('签到额度限制不能小于 -1'));
+    }
     const updateArray = compareObjects(inputs, inputsRow);
     if (!updateArray.length) return showWarning(t('你似乎并没有修改什么'));
     const requestQueue = updateArray.map((item) => {
@@ -135,6 +145,16 @@ export default function SettingsCheckin(props) {
                   placeholder={t('签到奖励的最大额度')}
                   onChange={handleFieldChange('checkin_setting.max_quota')}
                   min={0}
+                  disabled={!inputs['checkin_setting.enabled']}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  field={'checkin_setting.max_current_quota'}
+                  label={t('允许签到的最大当前额度')}
+                  placeholder={t('用户当前额度小于等于该值时才允许签到，设为 -1 表示不限制')}
+                  onChange={handleFieldChange('checkin_setting.max_current_quota')}
+                  min={-1}
                   disabled={!inputs['checkin_setting.enabled']}
                 />
               </Col>

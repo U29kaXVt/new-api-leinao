@@ -81,6 +81,17 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
     );
   }, [checkinData.stats?.records]);
 
+  const quotaEligible = checkinData.stats?.quota_eligible !== false;
+  const quotaLimited = checkinData.stats?.quota_limited === true;
+  const maxCurrentQuota = checkinData.stats?.max_current_quota;
+  const currentQuota = checkinData.stats?.current_quota;
+  const quotaLimitMessage =
+    quotaLimited && !quotaEligible
+      ? t('当前额度超过签到限制，需小于等于 {{limit}} 才可签到', {
+          limit: renderQuota(maxCurrentQuota || 0),
+        })
+      : null;
+
   // 获取签到状态
   const fetchCheckinStatus = async (month) => {
     const isFirstLoad = !initialLoaded;
@@ -261,6 +272,8 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
             <div className='text-xs text-gray-500 dark:text-gray-400'>
               {!initialLoaded
                 ? t('正在加载签到状态...')
+                : quotaLimitMessage
+                  ? quotaLimitMessage
                 : checkinData.stats?.checked_in_today
                   ? t('今日已签到，累计签到') +
                     ` ${checkinData.stats?.total_checkins || 0} ` +
@@ -275,11 +288,17 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
           icon={<Gift size={16} />}
           onClick={() => doCheckin()}
           loading={checkinLoading || !initialLoaded}
-          disabled={!initialLoaded || checkinData.stats?.checked_in_today}
+          disabled={
+            !initialLoaded ||
+            checkinData.stats?.checked_in_today ||
+            !quotaEligible
+          }
           className='!bg-green-600 hover:!bg-green-700'
         >
           {!initialLoaded
             ? t('加载中...')
+            : !quotaEligible
+              ? t('当前不可签到')
             : checkinData.stats?.checked_in_today
               ? t('今日已签到')
               : t('立即签到')}
@@ -373,6 +392,21 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
               <li>{t('每日签到可获得随机额度奖励')}</li>
               <li>{t('签到奖励将直接添加到您的账户余额')}</li>
               <li>{t('每日仅可签到一次，请勿重复签到')}</li>
+              {quotaLimited ? (
+                <li>
+                  {typeof currentQuota === 'number'
+                    ? t(
+                        '仅当当前额度小于等于 {{limit}} 时才允许签到，当前额度 {{current}}',
+                        {
+                          limit: renderQuota(maxCurrentQuota || 0),
+                          current: renderQuota(currentQuota),
+                        },
+                      )
+                    : t('仅当当前额度小于等于 {{limit}} 时才允许签到', {
+                        limit: renderQuota(maxCurrentQuota || 0),
+                      })}
+                </li>
+              ) : null}
             </ul>
           </Typography.Text>
         </div>

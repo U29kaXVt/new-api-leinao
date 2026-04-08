@@ -25,8 +25,38 @@ type CheckinRecord struct {
 	QuotaAwarded int    `json:"quota_awarded"`
 }
 
+type CheckinEligibility struct {
+	CurrentQuota    int    `json:"current_quota"`
+	MaxCurrentQuota int    `json:"max_current_quota"`
+	QuotaLimited    bool   `json:"quota_limited"`
+	QuotaEligible   bool   `json:"quota_eligible"`
+	Reason          string `json:"reason,omitempty"`
+}
+
 func (Checkin) TableName() string {
 	return "checkins"
+}
+
+func GetUserCheckinEligibility(userId int) (*CheckinEligibility, error) {
+	setting := operation_setting.GetCheckinSetting()
+	currentQuota, err := GetUserQuota(userId, false)
+	if err != nil {
+		return nil, err
+	}
+
+	eligibility := &CheckinEligibility{
+		CurrentQuota:    currentQuota,
+		MaxCurrentQuota: setting.MaxCurrentQuota,
+		QuotaLimited:    setting.MaxCurrentQuota >= 0,
+		QuotaEligible:   true,
+	}
+
+	if eligibility.QuotaLimited && currentQuota > setting.MaxCurrentQuota {
+		eligibility.QuotaEligible = false
+		eligibility.Reason = "当前额度超过签到限制"
+	}
+
+	return eligibility, nil
 }
 
 // GetUserCheckinRecords 获取用户在指定日期范围内的签到记录
@@ -65,6 +95,14 @@ func UserCheckin(userId int) (*Checkin, error) {
 	}
 	if hasChecked {
 		return nil, errors.New("今日已签到")
+	}
+
+	eligibility, err := GetUserCheckinEligibility(userId)
+	if err != nil {
+		return nil, err
+	}
+	if !eligibility.QuotaEligible {
+		return nil, errors.New("当前额度超过签到限制，仅当额度小于等于限制值时允许签到")
 	}
 
 	// 计算随机额度奖励
@@ -163,6 +201,11 @@ func GetUserCheckinStats(userId int, month string) (map[string]interface{}, erro
 	// 检查今天是否已签到
 	hasCheckedToday, _ := HasCheckedInToday(userId)
 
+	eligibility, err := GetUserCheckinEligibility(userId)
+	if err != nil {
+		return nil, err
+	}
+
 	// 获取用户所有时间的签到统计
 	var totalCheckins int64
 	var totalQuota int64
@@ -170,10 +213,15 @@ func GetUserCheckinStats(userId int, month string) (map[string]interface{}, erro
 	DB.Model(&Checkin{}).Where("user_id = ?", userId).Select("COALESCE(SUM(quota_awarded), 0)").Scan(&totalQuota)
 
 	return map[string]interface{}{
-		"total_quota":      totalQuota,      // 所有时间累计获得的额度
-		"total_checkins":   totalCheckins,   // 所有时间累计签到次数
-		"checkin_count":    len(records),    // 本月签到次数
-		"checked_in_today": hasCheckedToday, // 今天是否已签到
-		"records":          checkinRecords,  // 本月签到记录详情（不含id和user_id）
+		"total_quota":        totalQuota,      // 所有时间累计获得的额度
+		"total_checkins":     totalCheckins,   // 所有时间累计签到次数
+		"checkin_count":      len(records),    // 本月签到次数
+		"checked_in_today":   hasCheckedToday, // 今天是否已签到
+		"records":            checkinRecords,  // 本月签到记录详情（不含id和user_id）
+		"current_quota":      eligibility.CurrentQuota,
+		"max_current_quota":  eligibility.MaxCurrentQuota,
+		"quota_limited":      eligibility.QuotaLimited,
+		"quota_eligible":     eligibility.QuotaEligible,
+		"quota_limit_reason": eligibility.Reason,
 	}, nil
 }
