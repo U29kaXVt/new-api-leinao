@@ -151,6 +151,8 @@ docker run --name new-api -d --restart always \
 
 🎉 部署完成后，访问 `http://localhost:3000` 即可使用！
 
+⚡ 也可以直接通过 [Zeabur 模板](https://zeabur.com/zh-CN/templates/0EHHPL) 部署相同版本。
+
 📖 更多部署方式请参考 [部署指南](https://docs.newapi.pro/zh/docs/installation)
 
 ---
@@ -330,6 +332,10 @@ docker run --name new-api -d --restart always \
 </details>
 
 ### 🔧 部署方式
+
+### ⚡ Zeabur 一键部署
+
+[![Deploy on Zeabur](https://zeabur.com/button.svg)](https://zeabur.com/zh-CN/templates/0EHHPL)
 
 <details>
 <summary><strong>方式 1：Docker Compose（推荐）</strong></summary>

@@ -1,10 +1,9 @@
-# nonk8s
 apiVersion: zeabur.com/v1
 kind: Template
 metadata:
-  name: new-api
+  name: new-api-leinao
 spec:
-  description: Deploy new-api on Zeabur with PostgreSQL and Redis.
+  description: Deploy new-api-leinao on Zeabur with PostgreSQL and Redis.
   icon: https://raw.githubusercontent.com/U29kaXVt/new-api-leinao/main/web/public/logo.png
   coverImage: https://raw.githubusercontent.com/U29kaXVt/new-api-leinao/main/web/public/cover-4.webp
   tags:
@@ -14,6 +13,8 @@ spec:
     - PostgreSQL
     - Redis
   readme: |-
+    这个分支有discord身份组验证功能，然后没了
+    
     This template deploys:
     - `new-api` built from this repository's `personal/dev` branch
     - PostgreSQL 15
@@ -31,20 +32,13 @@ spec:
       name: Public Domain
       description: Domain used to access the new-api web UI.
     - key: SESSION_SECRET
-      type: STRING
+      type: PASSWORD
       name: Session Secret
       description: Session signing key. Change this to a random string before production use.
-      default: change-me-to-a-random-string
     - key: POSTGRES_PASSWORD
-      type: STRING
+      type: PASSWORD
       name: PostgreSQL Password
       description: Password for the PostgreSQL root user.
-      default: change-me-postgres-password
-    - key: TZ
-      type: STRING
-      name: Time Zone
-      description: Time zone used by the application container.
-      default: Asia/Shanghai
   services:
     - name: new-api
       icon: https://raw.githubusercontent.com/U29kaXVt/new-api-leinao/main/web/public/logo.png
@@ -55,8 +49,8 @@ spec:
         - redis
       spec:
         source:
-          type: GITHUB
-          repoID: 1204609002
+          source: GITHUB
+          repo: 1204609002
           branch: personal/dev
         ports:
           - id: web
@@ -69,7 +63,7 @@ spec:
           PORT:
             default: "3000"
           TZ:
-            default: ${TZ}
+            default: Asia/Shanghai
           SESSION_SECRET:
             default: ${SESSION_SECRET}
           SQL_DSN:
@@ -97,26 +91,21 @@ spec:
           POSTGRES_USER:
             default: root
             expose: true
-            readonly: true
           POSTGRES_PASSWORD:
             default: ${POSTGRES_PASSWORD}
             expose: true
           POSTGRES_DB:
             default: new-api
             expose: true
-            readonly: true
           POSTGRES_HOST:
             default: ${CONTAINER_HOSTNAME}
             expose: true
-            readonly: true
           POSTGRES_PORT:
             default: ${DATABASE_PORT}
             expose: true
-            readonly: true
           POSTGRES_URI:
             default: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
             expose: true
-            readonly: true
     - name: redis
       icon: https://raw.githubusercontent.com/zeabur/service-icons/main/marketplace/redis.svg
       template: PREBUILT
@@ -134,12 +123,9 @@ spec:
           REDIS_HOST:
             default: ${CONTAINER_HOSTNAME}
             expose: true
-            readonly: true
           REDIS_PORT:
             default: ${DATABASE_PORT}
             expose: true
-            readonly: true
           REDIS_URI:
             default: redis://${REDIS_HOST}:${REDIS_PORT}
             expose: true
-            readonly: true

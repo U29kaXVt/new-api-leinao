@@ -151,6 +151,8 @@ docker run --name new-api -d --restart always \
 
 🎉 After deployment is complete, visit `http://localhost:3000` to start using!
 
+⚡ You can also deploy the same version directly with the [Zeabur template](https://zeabur.com/zh-CN/templates/0EHHPL).
+
 📖 For more deployment methods, please refer to [Deployment Guide](https://docs.newapi.pro/en/docs/installation)
 
 ---
@@ -330,6 +332,10 @@ docker run --name new-api -d --restart always \
 </details>
 
 ### 🔧 Deployment Methods
+
+### ⚡ Deploy on Zeabur
+
+[![Deploy on Zeabur](https://zeabur.com/button.svg)](https://zeabur.com/zh-CN/templates/0EHHPL)
 
 <details>
 <summary><strong>Method 1: Docker Compose (Recommended)</strong></summary>
