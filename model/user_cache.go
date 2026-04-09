@@ -231,3 +231,11 @@ func GetUserLanguage(userId int) string {
 	}
 	return userCache.GetSetting().Language
 }
+
+func RefreshUserCache(userId int) error {
+	user, err := GetUserById(userId, false)
+	if err != nil {
+		return err
+	}
+	return updateUserCache(*user)
+}

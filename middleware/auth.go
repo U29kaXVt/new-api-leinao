@@ -339,6 +339,10 @@ func TokenAuth() func(c *gin.Context) {
 			abortWithOpenAiMessage(c, http.StatusForbidden, "用户已被封禁")
 			return
 		}
+		if err := service.EnsureUserHasDonationChannel(token.UserId, model.IsAdmin(token.UserId)); err != nil {
+			abortWithOpenAiMessage(c, http.StatusForbidden, err.Error(), types.ErrorCodeAccessDenied)
+			return
+		}
 
 		userCache.WriteContext(c)
 

@@ -45,6 +45,7 @@ import ModelPage from './pages/Model';
 import ModelDeploymentPage from './pages/ModelDeployment';
 import Playground from './pages/Playground';
 import Subscription from './pages/Subscription';
+import DonationChannel from './pages/DonationChannel';
 import OAuth2Callback from './components/auth/OAuth2Callback';
 import PersonalSetting from './components/settings/PersonalSetting';
 import Setup from './pages/Setup';
@@ -273,6 +274,16 @@ function App() {
             <PrivateRoute>
               <Suspense fallback={<Loading></Loading>} key={location.pathname}>
                 <TopUp />
+              </Suspense>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/donation-channel'
+          element={
+            <PrivateRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <DonationChannel />
               </Suspense>
             </PrivateRoute>
           }

@@ -213,7 +213,7 @@ func FetchUpstreamModels(c *gin.Context) {
 		return
 	}
 
-	ids, err := fetchChannelUpstreamModelIDs(channel)
+	ids, err := service.FetchChannelUpstreamModelIDs(channel)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,

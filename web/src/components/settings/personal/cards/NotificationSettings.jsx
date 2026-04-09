@@ -77,11 +77,12 @@ const NotificationSettings = ({
       midjourney: true,
       task: true,
     },
-    personal: {
-      enabled: true,
-      topup: true,
-      personal: true,
-    },
+      personal: {
+        enabled: true,
+        topup: true,
+        donation_channel: true,
+        personal: true,
+      },
     admin: {
       enabled: true,
       channel: true,
@@ -165,7 +166,12 @@ const NotificationSettings = ({
         midjourney: true,
         task: true,
       },
-      personal: { enabled: true, topup: true, personal: true },
+      personal: {
+        enabled: true,
+        topup: true,
+        donation_channel: true,
+        personal: true,
+      },
       admin: {
         enabled: true,
         channel: true,
@@ -279,6 +285,11 @@ const NotificationSettings = ({
       description: t('用户个人功能'),
       modules: [
         { key: 'topup', title: t('钱包管理'), description: t('余额充值管理') },
+        {
+          key: 'donation_channel',
+          title: t('我的捐赠渠道'),
+          description: t('提交并查看本人有效捐赠渠道'),
+        },
         {
           key: 'personal',
           title: t('个人设置'),

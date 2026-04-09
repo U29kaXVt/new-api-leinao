@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/samber/lo"
@@ -774,8 +775,23 @@ func DeleteChannelByStatus(status int64) (int64, error) {
 }
 
 func DeleteDisabledChannel() (int64, error) {
-	result := DB.Where("status = ? or status = ?", common.ChannelStatusAutoDisabled, common.ChannelStatusManuallyDisabled).Delete(&Channel{})
-	return result.RowsAffected, result.Error
+	templateChannelID := operation_setting.GetDonationSetting().TemplateChannelID
+	var ids []int
+	query := DB.Model(&Channel{}).
+		Where("status = ? or status = ?", common.ChannelStatusAutoDisabled, common.ChannelStatusManuallyDisabled)
+	if templateChannelID > 0 {
+		query = query.Where("id <> ?", templateChannelID)
+	}
+	if err := query.Pluck("id", &ids).Error; err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	if err := BatchDeleteChannels(ids); err != nil {
+		return 0, err
+	}
+	return int64(len(ids)), nil
 }
 
 func GetPaginatedTags(offset int, limit int) ([]*string, error) {
