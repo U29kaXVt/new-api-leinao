@@ -29,6 +29,18 @@ func GetUserDonationChannels(userID int, onlyEnabled bool) ([]*Channel, error) {
 	return channels, err
 }
 
+func GetActiveDonationChannels() ([]*Channel, error) {
+	var channels []*Channel
+	err := DB.
+		Where("tag LIKE ?", "donor_user_%").
+		Where("status = ?", common.ChannelStatusEnabled).
+		Order("id desc").
+		Omit("key").
+		Find(&channels).
+		Error
+	return channels, err
+}
+
 func CountUserActiveDonationChannels(userID int) (int64, error) {
 	var count int64
 	err := DB.Model(&Channel{}).
@@ -42,6 +54,14 @@ func HasUserDonationFingerprint(userID int, fingerprint string) (bool, error) {
 	var count int64
 	err := DB.Model(&DonationChannelSubmission{}).
 		Where("user_id = ? AND fingerprint = ?", userID, fingerprint).
+		Count(&count).Error
+	return count > 0, err
+}
+
+func HasDonationFingerprint(fingerprint string) (bool, error) {
+	var count int64
+	err := DB.Model(&DonationChannelSubmission{}).
+		Where("fingerprint = ?", fingerprint).
 		Count(&count).Error
 	return count > 0, err
 }

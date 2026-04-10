@@ -17,12 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import {
   Banner,
   Button,
   Card,
   Form,
+  Radio,
+  RadioGroup,
   Space,
   Spin,
   Table,
@@ -31,34 +33,44 @@ import {
 } from '@douyinfe/semi-ui';
 import {
   API,
+  copy,
   showError,
   showSuccess,
   timestamp2string,
   renderQuotaWithPrompt,
 } from '../../helpers';
 import { useTranslation } from 'react-i18next';
+import { StatusContext } from '../../context/Status';
 
 export default function DonationChannel() {
   const { t } = useTranslation();
+  const [statusState] = useContext(StatusContext);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [channels, setChannels] = useState([]);
+  const [scope, setScope] = useState('all');
   const [formApi, setFormApi] = useState(null);
+  const donationGuideText = statusState?.status?.donation_guide_text || '';
+  const donationCopyButtonText =
+    statusState?.status?.donation_copy_button_text || '';
+  const donationCopyButtonContent =
+    statusState?.status?.donation_copy_button_content || '';
+  const shouldShowCopyButton =
+    donationCopyButtonText.trim() !== '' &&
+    donationCopyButtonContent.trim() !== '';
+
+  const filteredChannels = useMemo(() => {
+    if (scope === 'mine') {
+      return channels.filter((channel) => channel.is_mine);
+    }
+    return channels;
+  }, [channels, scope]);
 
   const columns = useMemo(
     () => [
       {
         title: t('名称'),
         dataIndex: 'name',
-      },
-      {
-        title: t('Base URL'),
-        dataIndex: 'base_url',
-        render: (value) => (
-          <Typography.Text copyable={{ content: value }}>
-            {value}
-          </Typography.Text>
-        ),
       },
       {
         title: t('状态'),
@@ -68,14 +80,6 @@ export default function DonationChannel() {
             {status === 1 ? t('启用') : t('禁用')}
           </Tag>
         ),
-      },
-      {
-        title: t('模型列表'),
-        dataIndex: 'models',
-        render: (models) =>
-          Array.isArray(models) && models.length > 0
-            ? models.join(', ')
-            : t('未返回'),
       },
       {
         title: t('创建时间'),
@@ -108,7 +112,6 @@ export default function DonationChannel() {
     try {
       const res = await API.post('/api/user/donation-channel', {
         base_url: values.base_url,
-        key: values.key,
       });
       const { success, message, data } = res.data;
       if (!success) {
@@ -129,6 +132,15 @@ export default function DonationChannel() {
     }
   };
 
+  const onCopyGuideContent = async () => {
+    const ok = await copy(donationCopyButtonContent);
+    if (ok) {
+      showSuccess(t('已复制到剪贴板'));
+      return;
+    }
+    showError(t('复制失败，请手动复制'));
+  };
+
   useEffect(() => {
     loadChannels();
   }, []);
@@ -139,12 +151,15 @@ export default function DonationChannel() {
         <Card>
           <Space vertical align='stretch'>
             <Typography.Title heading={4} style={{ margin: 0 }}>
-              {t('我的捐赠渠道')}
+              {t('捐赠渠道')}
             </Typography.Title>
             <Typography.Text type='tertiary'>
               {t(
-                '提交后系统会基于管理员配置的模板渠道克隆你的专属渠道，并校验上游模型列表。密钥不会在列表中返回。',
+                '提交后系统会将你的渠道加入列表，之后你就可以正常使用 API Key 了。下方默认展示当前全部可用捐赠渠道，你也可以筛选只看自己捐赠的。',
               )}
+            </Typography.Text>
+            <Typography.Text type='tertiary'>
+              {t('如果你捐赠的渠道均不可用，你将无法继续使用。')}
             </Typography.Text>
             <Banner
               type='info'
@@ -154,6 +169,29 @@ export default function DonationChannel() {
                 '普通用户需要至少保留 1 条本人启用中的捐赠渠道，才能继续通过令牌调用模型。',
               )}
             />
+            {(donationGuideText.trim() !== '' || shouldShowCopyButton) && (
+              <Card
+                size='small'
+                bordered
+                title={t('捐赠指引')}
+                bodyStyle={{ paddingTop: 12, paddingBottom: 12 }}
+              >
+                <Space vertical align='stretch'>
+                  {donationGuideText.trim() !== '' && (
+                    <Typography.Paragraph style={{ whiteSpace: 'pre-wrap' }}>
+                      {donationGuideText}
+                    </Typography.Paragraph>
+                  )}
+                  {shouldShowCopyButton && (
+                    <div>
+                      <Button type='primary' theme='solid' onClick={onCopyGuideContent}>
+                        {donationCopyButtonText}
+                      </Button>
+                    </div>
+                  )}
+                </Space>
+              </Card>
+            )}
           </Space>
         </Card>
 
@@ -165,27 +203,41 @@ export default function DonationChannel() {
               placeholder={t('请输入上游服务的 Base URL')}
               rules={[{ required: true, message: t('请输入 Base URL') }]}
             />
-            <Form.Input
-              field='key'
-              mode='password'
-              label={t('密钥')}
-              placeholder={t('请输入上游服务密钥')}
-              rules={[{ required: true, message: t('请输入密钥') }]}
-            />
             <Button type='primary' htmlType='submit' loading={submitting}>
               {t('提交并校验')}
             </Button>
           </Form>
         </Card>
 
-        <Card title={t('当前有效捐赠渠道')}>
+        <Card
+          title={t('当前可用捐赠渠道')}
+          headerExtraContent={
+            <RadioGroup
+              type='button'
+              value={scope}
+              onChange={(event) => setScope(event.target.value)}
+            >
+              <Radio value='all'>
+                {t('全部')} ({channels.length})
+              </Radio>
+              <Radio value='mine'>
+                {t('仅我捐赠的')} (
+                {channels.filter((channel) => channel.is_mine).length})
+              </Radio>
+            </RadioGroup>
+          }
+        >
           <Spin spinning={loading}>
             <Table
-              dataSource={channels}
+              dataSource={filteredChannels}
               columns={columns}
               rowKey='id'
               pagination={false}
-              empty={t('暂无有效捐赠渠道')}
+              empty={
+                scope === 'mine'
+                  ? t('你还没有可用的捐赠渠道')
+                  : t('暂无可用捐赠渠道')
+              }
             />
           </Spin>
         </Card>

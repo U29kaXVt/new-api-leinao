@@ -39,7 +39,7 @@ func CreateDonationChannel(c *gin.Context) {
 }
 
 func GetDonationChannels(c *gin.Context) {
-	items, err := service.GetUserDonationChannelItems(c.GetInt("id"))
+	items, err := service.GetDonationChannelItems(c.GetInt("id"))
 	if err != nil {
 		common.ApiError(c, err)
 		return

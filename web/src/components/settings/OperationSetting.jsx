@@ -83,6 +83,9 @@ const OperationSetting = () => {
     'donation_setting.enabled': false,
     'donation_setting.template_channel_id': 0,
     'donation_setting.reward_quota': 0,
+    'donation_setting.guide_text': '',
+    'donation_setting.copy_button_text': '',
+    'donation_setting.copy_button_content': '',
 
     /* 令牌设置 */
     'token_setting.max_user_tokens': 1000,

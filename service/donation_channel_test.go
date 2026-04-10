@@ -59,7 +59,6 @@ func TestCreateDonationChannel_SuccessAndDedup(t *testing.T) {
 
 	resp, err := CreateDonationChannel(user.Id, user.Username, dto.CreateDonationChannelRequest{
 		BaseURL: server.URL,
-		Key:     "real-key",
 	})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -71,6 +70,7 @@ func TestCreateDonationChannel_SuccessAndDedup(t *testing.T) {
 	require.NotNil(t, channel)
 	assert.Equal(t, model.DonationChannelTag(user.Id), channel.GetTag())
 	assert.Equal(t, common.ChannelStatusEnabled, channel.Status)
+	assert.Equal(t, "template-key", channel.Key)
 
 	var abilities []model.Ability
 	require.NoError(t, model.DB.Where("channel_id = ?", channel.Id).Find(&abilities).Error)
@@ -89,13 +89,27 @@ func TestCreateDonationChannel_SuccessAndDedup(t *testing.T) {
 
 	_, err = CreateDonationChannel(user.Id, user.Username, dto.CreateDonationChannelRequest{
 		BaseURL: server.URL + "/",
-		Key:     "real-key",
 	})
 	require.ErrorIs(t, err, ErrDonationChannelAlreadySubmitted)
 
 	var channelCount int64
 	require.NoError(t, model.DB.Model(&model.Channel{}).Where("tag = ?", model.DonationChannelTag(user.Id)).Count(&channelCount).Error)
 	assert.Equal(t, int64(1), channelCount)
+
+	otherUser := &model.User{
+		Id:       102,
+		Username: "another_user",
+		Quota:    1000,
+		Status:   common.UserStatusEnabled,
+		Group:    "default",
+		AffCode:  "another-user-aff",
+	}
+	require.NoError(t, model.DB.Create(otherUser).Error)
+
+	_, err = CreateDonationChannel(otherUser.Id, otherUser.Username, dto.CreateDonationChannelRequest{
+		BaseURL: server.URL,
+	})
+	require.ErrorIs(t, err, ErrDonationChannelAlreadySubmitted)
 }
 
 func TestEnsureUserHasDonationChannel(t *testing.T) {
@@ -125,4 +139,70 @@ func TestEnsureUserHasDonationChannel(t *testing.T) {
 	require.NoError(t, model.DB.Create(channel).Error)
 
 	require.NoError(t, EnsureUserHasDonationChannel(userID, false))
+}
+
+func TestGetDonationChannelItems(t *testing.T) {
+	truncate(t)
+
+	channels := []*model.Channel{
+		{
+			Id:          701,
+			Type:        constant.ChannelTypeCustom,
+			Key:         "key-1",
+			Name:        "mine-enabled",
+			Status:      common.ChannelStatusEnabled,
+			Models:      "gpt-4o-mini",
+			Group:       "default",
+			CreatedTime: common.GetTimestamp() - 10,
+			Tag:         common.GetPointer[string](model.DonationChannelTag(301)),
+		},
+		{
+			Id:          702,
+			Type:        constant.ChannelTypeCustom,
+			Key:         "key-2",
+			Name:        "other-enabled",
+			Status:      common.ChannelStatusEnabled,
+			Models:      "gpt-4o-mini",
+			Group:       "default",
+			CreatedTime: common.GetTimestamp(),
+			Tag:         common.GetPointer[string](model.DonationChannelTag(302)),
+		},
+		{
+			Id:          703,
+			Type:        constant.ChannelTypeCustom,
+			Key:         "key-3",
+			Name:        "mine-disabled",
+			Status:      common.ChannelStatusManuallyDisabled,
+			Models:      "gpt-4o-mini",
+			Group:       "default",
+			CreatedTime: common.GetTimestamp(),
+			Tag:         common.GetPointer[string](model.DonationChannelTag(301)),
+		},
+		{
+			Id:          704,
+			Type:        constant.ChannelTypeCustom,
+			Key:         "key-4",
+			Name:        "non-donation",
+			Status:      common.ChannelStatusEnabled,
+			Models:      "gpt-4o-mini",
+			Group:       "default",
+			CreatedTime: common.GetTimestamp(),
+		},
+	}
+
+	for _, channel := range channels {
+		require.NoError(t, model.DB.Create(channel).Error)
+	}
+
+	items, err := GetDonationChannelItems(301)
+	require.NoError(t, err)
+	require.Len(t, items, 2)
+
+	assert.Equal(t, 702, items[0].Id)
+	assert.False(t, items[0].IsMine)
+	assert.Equal(t, "other-enabled", items[0].Name)
+
+	assert.Equal(t, 701, items[1].Id)
+	assert.True(t, items[1].IsMine)
+	assert.Equal(t, "mine-enabled", items[1].Name)
 }

@@ -67,16 +67,8 @@ func normalizeDonationBaseURL(raw string) (string, error) {
 	return parsed.String(), nil
 }
 
-func normalizeDonationKey(raw string) (string, error) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return "", errors.New("key 不能为空")
-	}
-	return trimmed, nil
-}
-
-func buildDonationFingerprint(userID int, normalizedBaseURL string, normalizedKey string) string {
-	payload := fmt.Sprintf("%d\n%s\n%s", userID, normalizedBaseURL, normalizedKey)
+func buildDonationFingerprint(normalizedBaseURL string) string {
+	payload := normalizedBaseURL
 	return hex.EncodeToString(common.Sha256Raw([]byte(payload)))
 }
 
@@ -89,11 +81,10 @@ func buildDonationChannelName(username string) string {
 	return fmt.Sprintf("%s#%s", safeUsername, hex.EncodeToString(suffixBytes[:4]))
 }
 
-func cloneDonationTemplateChannel(template *model.Channel, username string, baseURL string, key string, userID int) *model.Channel {
+func cloneDonationTemplateChannel(template *model.Channel, username string, baseURL string, userID int) *model.Channel {
 	clone := *template
 	clone.Id = 0
 	clone.BaseURL = common.GetPointer[string](baseURL)
-	clone.Key = key
 	clone.Name = buildDonationChannelName(username)
 	clone.Status = common.ChannelStatusEnabled
 	clone.SetTag(model.DonationChannelTag(userID))
@@ -112,8 +103,7 @@ func donationChannelToItem(channel *model.Channel) dto.DonationChannelItem {
 	return dto.DonationChannelItem{
 		Id:          channel.Id,
 		Name:        channel.Name,
-		BaseURL:     channel.GetBaseURL(),
-		Models:      channel.GetModels(),
+		IsMine:      false,
 		Status:      channel.Status,
 		CreatedTime: channel.CreatedTime,
 	}
@@ -169,18 +159,6 @@ func CreateDonationChannel(userID int, username string, req dto.CreateDonationCh
 	if err != nil {
 		return nil, err
 	}
-	normalizedKey, err := normalizeDonationKey(req.Key)
-	if err != nil {
-		return nil, err
-	}
-	fingerprint := buildDonationFingerprint(userID, normalizedBaseURL, normalizedKey)
-	exists, err := model.HasUserDonationFingerprint(userID, fingerprint)
-	if err != nil {
-		return nil, err
-	}
-	if exists {
-		return nil, ErrDonationChannelAlreadySubmitted
-	}
 
 	template, err := model.GetChannelById(setting.TemplateChannelID, true)
 	if err != nil {
@@ -189,8 +167,16 @@ func CreateDonationChannel(userID int, username string, req dto.CreateDonationCh
 	if template.ChannelInfo.IsMultiKey {
 		return nil, errors.New("捐赠模板渠道不能使用多密钥模式")
 	}
+	fingerprint := buildDonationFingerprint(normalizedBaseURL)
+	exists, err := model.HasDonationFingerprint(fingerprint)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, ErrDonationChannelAlreadySubmitted
+	}
 
-	channel := cloneDonationTemplateChannel(template, username, normalizedBaseURL, normalizedKey, userID)
+	channel := cloneDonationTemplateChannel(template, username, normalizedBaseURL, userID)
 	if err := channel.Insert(); err != nil {
 		return nil, err
 	}
@@ -208,7 +194,7 @@ func CreateDonationChannel(userID int, username string, req dto.CreateDonationCh
 
 	if err := persistDonationReward(userID, channel.Id, fingerprint, setting.RewardQuota); err != nil {
 		_ = channel.Delete()
-		recheckExists, recheckErr := model.HasUserDonationFingerprint(userID, fingerprint)
+		recheckExists, recheckErr := model.HasDonationFingerprint(fingerprint)
 		if recheckErr == nil && recheckExists {
 			return nil, ErrDonationChannelAlreadySubmitted
 		}
@@ -228,14 +214,17 @@ func CreateDonationChannel(userID int, username string, req dto.CreateDonationCh
 	}, nil
 }
 
-func GetUserDonationChannelItems(userID int) ([]dto.DonationChannelItem, error) {
-	channels, err := model.GetUserDonationChannels(userID, true)
+func GetDonationChannelItems(userID int) ([]dto.DonationChannelItem, error) {
+	channels, err := model.GetActiveDonationChannels()
 	if err != nil {
 		return nil, err
 	}
 	items := make([]dto.DonationChannelItem, 0, len(channels))
+	userTag := model.DonationChannelTag(userID)
 	for _, channel := range channels {
-		items = append(items, donationChannelToItem(channel))
+		item := donationChannelToItem(channel)
+		item.IsMine = channel.GetTag() == userTag
+		items = append(items, item)
 	}
 	return items, nil
 }

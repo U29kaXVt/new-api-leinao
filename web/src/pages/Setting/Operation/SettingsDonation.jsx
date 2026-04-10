@@ -30,6 +30,9 @@ export default function SettingsDonation(props) {
     'donation_setting.enabled': false,
     'donation_setting.template_channel_id': 0,
     'donation_setting.reward_quota': 0,
+    'donation_setting.guide_text': '',
+    'donation_setting.copy_button_text': '',
+    'donation_setting.copy_button_content': '',
   });
 
   const handleFieldChange = (field) => {
@@ -43,6 +46,10 @@ export default function SettingsDonation(props) {
       inputs['donation_setting.template_channel_id'] || 0,
     );
     const rewardQuota = Number(inputs['donation_setting.reward_quota'] || 0);
+    const guideText = inputs['donation_setting.guide_text'] || '';
+    const copyButtonText = inputs['donation_setting.copy_button_text'] || '';
+    const copyButtonContent =
+      inputs['donation_setting.copy_button_content'] || '';
 
     if (templateChannelID < 0) {
       showError(t('模板渠道 ID 不能小于 0'));
@@ -68,6 +75,18 @@ export default function SettingsDonation(props) {
           key: 'donation_setting.reward_quota',
           value: String(rewardQuota),
         }),
+        API.put('/api/option/', {
+          key: 'donation_setting.guide_text',
+          value: guideText,
+        }),
+        API.put('/api/option/', {
+          key: 'donation_setting.copy_button_text',
+          value: copyButtonText,
+        }),
+        API.put('/api/option/', {
+          key: 'donation_setting.copy_button_content',
+          value: copyButtonContent,
+        }),
       ]);
       showSuccess(t('保存成功'));
       props.refresh?.();
@@ -89,6 +108,12 @@ export default function SettingsDonation(props) {
       'donation_setting.reward_quota': Number(
         props.options?.['donation_setting.reward_quota'] || 0,
       ),
+      'donation_setting.guide_text':
+        props.options?.['donation_setting.guide_text'] || '',
+      'donation_setting.copy_button_text':
+        props.options?.['donation_setting.copy_button_text'] || '',
+      'donation_setting.copy_button_content':
+        props.options?.['donation_setting.copy_button_content'] || '',
     };
     setInputs(nextInputs);
     refForm.current?.setValues(nextInputs);
@@ -138,6 +163,40 @@ export default function SettingsDonation(props) {
                 min={0}
                 placeholder={t('捐赠校验成功后发放的一次性额度')}
                 onChange={handleFieldChange('donation_setting.reward_quota')}
+              />
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={24}>
+              <Form.TextArea
+                field='donation_setting.guide_text'
+                label={t('捐赠指引')}
+                placeholder={t('展示在用户捐赠页面顶部的说明内容，支持多行文本')}
+                autosize
+                onChange={handleFieldChange('donation_setting.guide_text')}
+              />
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col xs={24} sm={12}>
+              <Form.Input
+                field='donation_setting.copy_button_text'
+                label={t('复制按钮文案')}
+                placeholder={t('例如：复制捐赠交流群')}
+                onChange={handleFieldChange(
+                  'donation_setting.copy_button_text',
+                )}
+              />
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.TextArea
+                field='donation_setting.copy_button_content'
+                label={t('复制按钮内容')}
+                placeholder={t('点击按钮后写入剪贴板的内容，支持多行文本')}
+                autosize
+                onChange={handleFieldChange(
+                  'donation_setting.copy_button_content',
+                )}
               />
             </Col>
           </Row>
