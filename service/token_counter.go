@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	constant2 "github.com/QuantumNous/new-api/relay/constant"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
@@ -180,7 +181,7 @@ func getImageToken(c *gin.Context, fileMeta *types.FileMeta, model string, strea
 
 func EstimateRequestToken(c *gin.Context, meta *types.TokenCountMeta, info *relaycommon.RelayInfo) (int, error) {
 	// 是否统计token
-	if !constant.CountToken {
+	if !constant.CountToken && !operation_setting.IsSingleInputTokensLimitEnabled() {
 		return 0, nil
 	}
 

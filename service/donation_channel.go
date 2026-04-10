@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 	"sync"
@@ -59,11 +60,11 @@ func normalizeDonationBaseURL(raw string) (string, error) {
 		return "", errors.New("该域名后缀不允许用于捐赠渠道")
 	}
 
-	return (&url.URL{
-		Scheme: "https",
-		Host:   hostname,
-		Path:   "/api",
-	}).String(), nil
+	host := hostname
+	if port := strings.TrimSpace(parsed.Port()); port != "" {
+		host = net.JoinHostPort(hostname, port)
+	}
+	return buildDonationBaseURL("https", host), nil
 }
 
 func parseDonationBlockedDomainSuffixes() []string {
@@ -105,8 +106,55 @@ func isBlockedDonationHostname(hostname string) bool {
 }
 
 func buildDonationFingerprint(normalizedBaseURL string) string {
-	payload := normalizedBaseURL
+	parsed, err := url.Parse(normalizedBaseURL)
+	if err != nil {
+		return hex.EncodeToString(common.Sha256Raw([]byte(normalizedBaseURL)))
+	}
+	payload := strings.ToLower(parsed.Host) + "/api"
 	return hex.EncodeToString(common.Sha256Raw([]byte(payload)))
+}
+
+func buildDonationBaseURL(scheme, host string) string {
+	return (&url.URL{
+		Scheme: scheme,
+		Host:   host,
+		Path:   "/api",
+	}).String()
+}
+
+func buildDonationHTTPFallbackURL(baseURL string) (string, error) {
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return "", err
+	}
+	if parsed.Host == "" {
+		return "", errors.New("base_url 缺少主机名")
+	}
+	return buildDonationBaseURL("http", parsed.Host), nil
+}
+
+func validateDonationChannel(channel *model.Channel) ([]string, error) {
+	models, err := FetchChannelUpstreamModelIDs(channel)
+	if err == nil {
+		return models, nil
+	}
+	if !strings.HasPrefix(channel.GetBaseURL(), "https://") {
+		return nil, err
+	}
+
+	fallbackBaseURL, fallbackErr := buildDonationHTTPFallbackURL(channel.GetBaseURL())
+	if fallbackErr != nil {
+		return nil, err
+	}
+	channel.BaseURL = common.GetPointer[string](fallbackBaseURL)
+	if updateErr := model.DB.Model(channel).Update("base_url", fallbackBaseURL).Error; updateErr != nil {
+		return nil, err
+	}
+	models, fallbackErr = FetchChannelUpstreamModelIDs(channel)
+	if fallbackErr == nil {
+		return models, nil
+	}
+	return nil, fallbackErr
 }
 
 func buildDonationChannelName(username string) string {
@@ -223,7 +271,7 @@ func CreateDonationChannel(userID int, username string, req dto.CreateDonationCh
 		return nil, err
 	}
 
-	fetchedModels, err := FetchChannelUpstreamModelIDs(channel)
+	fetchedModels, err := validateDonationChannel(channel)
 	if err != nil {
 		_ = channel.Delete()
 		return nil, fmt.Errorf("校验捐赠渠道失败：%w", err)
@@ -266,7 +314,8 @@ func GetDonationChannelItems(userID int) ([]dto.DonationChannelItem, error) {
 	return items, nil
 }
 
-func EnsureUserHasDonationChannel(userID int, isAdmin bool) error {
+func EnsureUserHasDonationChannel(userID int, userGroup string, isAdmin bool) error {
+	_ = userGroup
 	if isAdmin {
 		return nil
 	}

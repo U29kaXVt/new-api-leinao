@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -488,4 +489,22 @@ func GetTokenKeysByIds(ids []int, userId int) ([]Token, error) {
 		Where("user_id = ? AND id IN (?)", userId, ids).
 		Find(&tokens).Error
 	return tokens, err
+}
+
+func RefreshTokenCache(tokenId int) error {
+	token, err := GetTokenById(tokenId)
+	if err != nil {
+		return err
+	}
+	if !common.RedisEnabled {
+		return nil
+	}
+	return cacheSetToken(*token)
+}
+
+func UpdateTokenStatusCache(tokenKey string, status int) error {
+	if !common.RedisEnabled {
+		return nil
+	}
+	return cacheSetTokenField(tokenKey, "Status", strconv.Itoa(status))
 }

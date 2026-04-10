@@ -123,7 +123,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
-	needCountToken := constant.CountToken
+	needCountToken := constant.CountToken || operation_setting.IsSingleInputTokensLimitEnabled()
 	// Avoid building huge CombineText (strings.Join) when token counting and sensitive check are both disabled.
 	var meta *types.TokenCountMeta
 	if needSensitiveCheck || needCountToken {
@@ -148,6 +148,19 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 
 	relayInfo.SetEstimatePromptTokens(tokens)
+	if result, limitErr := service.HandleSingleInputTokenLimit(
+		c.GetInt("id"),
+		c.GetInt("token_id"),
+		tokens,
+		common.GetContextKeyString(c, constant.ContextKeyUserGroup),
+		model.IsAdmin(c.GetInt("id")),
+	); limitErr != nil {
+		newAPIError = types.NewError(limitErr, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+		return
+	} else if result != nil {
+		newAPIError = types.NewOpenAIError(errors.New(result.Message), types.ErrorCodeAccessDenied, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+		return
+	}
 
 	priceData, err := helper.ModelPriceHelper(c, relayInfo, tokens, meta)
 	if err != nil {

@@ -58,6 +58,9 @@ export default function GeneralSettings(props) {
     DemoSiteEnabled: false,
     SelfUseModeEnabled: false,
     'token_setting.max_user_tokens': 1000,
+    'token_setting.single_input_tokens_limit': 0,
+    'token_setting.single_input_tokens_warn_threshold': 3,
+    'token_setting.single_input_tokens_exempt_groups': '',
   });
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
@@ -401,6 +404,44 @@ export default function GeneralSettings(props) {
                   extraText={t('每个用户最多可创建的令牌数量，默认 1000，设置过大可能会影响性能')}
                   placeholder={'1000'}
                   onChange={handleFieldChange('token_setting.max_user_tokens')}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  label={t('单次输入 tokens 上限')}
+                  field={'token_setting.single_input_tokens_limit'}
+                  step={1}
+                  min={0}
+                  extraText={t('设置为 0 表示不限制；超过后会立刻禁用当前 API Key 一次')}
+                  placeholder={'0'}
+                  onChange={handleFieldChange(
+                    'token_setting.single_input_tokens_limit',
+                  )}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  label={t('超限后封号阈值')}
+                  field={'token_setting.single_input_tokens_warn_threshold'}
+                  step={1}
+                  min={1}
+                  extraText={t('用户累计被警告达到该次数后，将同时禁用账号并写入备注')}
+                  placeholder={'3'}
+                  onChange={handleFieldChange(
+                    'token_setting.single_input_tokens_warn_threshold',
+                  )}
+                />
+              </Col>
+              <Col span={24}>
+                <Form.TextArea
+                  label={t('单次输入 tokens 限制豁免分组')}
+                  field={'token_setting.single_input_tokens_exempt_groups'}
+                  autosize
+                  placeholder={t('可按行或逗号分隔，例如：vip, internal')}
+                  extraText={t('这些用户分组会跳过单次输入 tokens 限制；管理员默认永久豁免')}
+                  onChange={handleFieldChange(
+                    'token_setting.single_input_tokens_exempt_groups',
+                  )}
                 />
               </Col>
             </Row>

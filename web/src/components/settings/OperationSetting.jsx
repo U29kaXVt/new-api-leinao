@@ -89,6 +89,9 @@ const OperationSetting = () => {
 
     /* 令牌设置 */
     'token_setting.max_user_tokens': 1000,
+    'token_setting.single_input_tokens_limit': 0,
+    'token_setting.single_input_tokens_warn_threshold': 3,
+    'token_setting.single_input_tokens_exempt_groups': '',
   });
 
   let [loading, setLoading] = useState(false);

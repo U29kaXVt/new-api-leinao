@@ -18,7 +18,7 @@ func TestCreateDonationChannel_SuccessAndDedup(t *testing.T) {
 	truncate(t)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/models" {
+		if r.URL.Path != "/api/v1/models" {
 			http.NotFound(w, r)
 			return
 		}
@@ -71,6 +71,7 @@ func TestCreateDonationChannel_SuccessAndDedup(t *testing.T) {
 	assert.Equal(t, model.DonationChannelTag(user.Id), channel.GetTag())
 	assert.Equal(t, common.ChannelStatusEnabled, channel.Status)
 	assert.Equal(t, "template-key", channel.Key)
+	assert.Equal(t, server.URL+"/api", channel.GetBaseURL())
 
 	var abilities []model.Ability
 	require.NoError(t, model.DB.Where("channel_id = ?", channel.Id).Find(&abilities).Error)
@@ -122,8 +123,8 @@ func TestEnsureUserHasDonationChannel(t *testing.T) {
 	operation_setting.GetDonationSetting().Enabled = true
 
 	const userID = 202
-	require.ErrorIs(t, EnsureUserHasDonationChannel(userID, false), ErrDonationChannelUnavailable)
-	require.NoError(t, EnsureUserHasDonationChannel(userID, true))
+	require.ErrorIs(t, EnsureUserHasDonationChannel(userID, "default", false), ErrDonationChannelUnavailable)
+	require.NoError(t, EnsureUserHasDonationChannel(userID, "default", true))
 
 	channel := &model.Channel{
 		Id:          601,
@@ -138,7 +139,7 @@ func TestEnsureUserHasDonationChannel(t *testing.T) {
 	}
 	require.NoError(t, model.DB.Create(channel).Error)
 
-	require.NoError(t, EnsureUserHasDonationChannel(userID, false))
+	require.NoError(t, EnsureUserHasDonationChannel(userID, "default", false))
 }
 
 func TestGetDonationChannelItems(t *testing.T) {
