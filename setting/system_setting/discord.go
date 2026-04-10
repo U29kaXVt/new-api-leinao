@@ -7,10 +7,11 @@ import (
 )
 
 type DiscordSettings struct {
-	Enabled      bool                `json:"enabled"`
-	ClientId     string              `json:"client_id"`
-	ClientSecret string              `json:"client_secret"`
-	AccessRules  []DiscordAccessRule `json:"access_rules"`
+	Enabled                bool                `json:"enabled"`
+	ClientId               string              `json:"client_id"`
+	ClientSecret           string              `json:"client_secret"`
+	AccessRules            []DiscordAccessRule `json:"access_rules"`
+	AccessRulesIgnoreLogin bool                `json:"access_rules_ignore_login"`
 }
 
 type DiscordAccessRule struct {
@@ -122,6 +123,16 @@ func (s *DiscordSettings) GetAccessRules() []DiscordAccessRule {
 
 func (s *DiscordSettings) RequiresMemberVerification() bool {
 	return len(s.GetAccessRules()) > 0
+}
+
+func (s *DiscordSettings) ShouldVerifyAccess(flow string) bool {
+	if !s.RequiresMemberVerification() {
+		return false
+	}
+	if s.AccessRulesIgnoreLogin && flow == "login" {
+		return false
+	}
+	return true
 }
 
 func (s *DiscordSettings) GetOAuthScopes() string {

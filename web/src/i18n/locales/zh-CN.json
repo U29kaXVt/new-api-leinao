@@ -360,6 +360,8 @@
     "侧边栏管理（全局控制）": "侧边栏管理（全局控制）",
     "侧边栏设置保存成功": "侧边栏设置保存成功",
     "保存": "保存",
+    "忽略 Discord 登录校验": "忽略 Discord 登录校验",
+    "开启后，登录不校验上述 Discord 访问规则；新注册用户和绑定 Discord 时仍会校验。": "开启后，登录不校验上述 Discord 访问规则；新注册用户和绑定 Discord 时仍会校验。",
     "保存 Discord OAuth 设置": "保存 Discord OAuth 设置",
     "保存 GitHub OAuth 设置": "保存 GitHub OAuth 设置",
     "保存 Linux DO OAuth 设置": "保存 Linux DO OAuth 设置",

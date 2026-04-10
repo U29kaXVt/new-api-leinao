@@ -34,3 +34,17 @@ type Provider interface {
 	// GetProviderPrefix returns the prefix for auto-generated usernames (e.g., "github_")
 	GetProviderPrefix() string
 }
+
+type OAuthAccessFlow string
+
+const (
+	OAuthAccessFlowLogin    OAuthAccessFlow = "login"
+	OAuthAccessFlowRegister OAuthAccessFlow = "register"
+	OAuthAccessFlowBind     OAuthAccessFlow = "bind"
+)
+
+// ConditionalAccessValidator is implemented by providers that need to decide
+// whether extra access checks should run for a specific OAuth flow.
+type ConditionalAccessValidator interface {
+	ValidateAccess(ctx context.Context, token *OAuthToken, oauthUser *OAuthUser, flow OAuthAccessFlow) error
+}

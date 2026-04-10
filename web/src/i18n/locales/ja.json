@@ -508,6 +508,8 @@
     "侧边栏管理（全局控制）": "サイドバー管理（グローバル設定）",
     "侧边栏设置保存成功": "サイドバー設定の保存に成功しました",
     "保存": "保存",
+    "忽略 Discord 登录校验": "Discord ログイン時の検証を無視する",
+    "开启后，登录不校验上述 Discord 访问规则；新注册用户和绑定 Discord 时仍会校验。": "有効にすると、上記の Discord アクセスルールはログイン時に検証されません。新規登録ユーザーと Discord 連携時は引き続き検証されます。",
     "保存 Discord OAuth 设置": "Save Discord OAuth Settings",
     "保存 GitHub OAuth 设置": "GitHub OAuth 設定を保存",
     "保存 Linux DO OAuth 设置": "Linux DO OAuth 設定を保存",

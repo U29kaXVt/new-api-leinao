@@ -119,6 +119,7 @@ const SystemSetting = () => {
     'discord.client_id': '',
     'discord.client_secret': '',
     'discord.access_rules': '[]',
+    'discord.access_rules_ignore_login': '',
     'oidc.enabled': '',
     'oidc.client_id': '',
     'oidc.client_secret': '',
@@ -252,6 +253,7 @@ const SystemSetting = () => {
           case 'SMTPSSLEnabled':
           case 'LinuxDOOAuthEnabled':
           case 'discord.enabled':
+          case 'discord.access_rules_ignore_login':
           case 'oidc.enabled':
           case 'passkey.enabled':
           case 'passkey.allow_insecure_origin':
@@ -597,6 +599,15 @@ const SystemSetting = () => {
       options.push({
         key: 'discord.access_rules',
         value: serializedAccessRules,
+      });
+    }
+    if (
+      originInputs['discord.access_rules_ignore_login'] !==
+      inputs['discord.access_rules_ignore_login']
+    ) {
+      options.push({
+        key: 'discord.access_rules_ignore_login',
+        value: inputs['discord.access_rules_ignore_login'],
       });
     }
 
@@ -1632,6 +1643,26 @@ const SystemSetting = () => {
                         </Text>
                       </div>
                     ) : null}
+                    <Form.Checkbox
+                      field="['discord.access_rules_ignore_login']"
+                      noLabel
+                      onChange={(e) =>
+                        handleCheckboxChange(
+                          'discord.access_rules_ignore_login',
+                          e,
+                        )
+                      }
+                    >
+                      {t('忽略 Discord 登录校验')}
+                    </Form.Checkbox>
+                    <Text
+                      type='tertiary'
+                      style={{ display: 'block', marginTop: 8, marginBottom: 12 }}
+                    >
+                      {t(
+                        '开启后，登录不校验上述 Discord 访问规则；新注册用户和绑定 Discord 时仍会校验。',
+                      )}
+                    </Text>
                     {discordAccessRules.map((rule, index) => (
                       <Card
                         key={rule._id}

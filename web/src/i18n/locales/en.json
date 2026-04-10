@@ -519,6 +519,8 @@
     "侧边栏管理（全局控制）": "Sidebar Management (Global Control)",
     "侧边栏设置保存成功": "Sidebar settings saved successfully",
     "保存": "Save",
+    "忽略 Discord 登录校验": "Ignore Discord checks during login",
+    "开启后，登录不校验上述 Discord 访问规则；新注册用户和绑定 Discord 时仍会校验。": "When enabled, the Discord access rules above are skipped during login. New registrations and Discord bindings are still checked.",
     "保存 Discord OAuth 设置": "Save Discord OAuth Settings",
     "保存 GitHub OAuth 设置": "Save GitHub OAuth Settings",
     "保存 Linux DO OAuth 设置": "Save Linux DO OAuth Settings",

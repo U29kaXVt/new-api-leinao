@@ -509,6 +509,8 @@
     "侧边栏管理（全局控制）": "Quản lý thanh bên (Kiểm soát toàn cầu)",
     "侧边栏设置保存成功": "Đã lưu cài đặt thanh bên thành công",
     "保存": "Lưu",
+    "忽略 Discord 登录校验": "Bỏ qua kiểm tra Discord khi đăng nhập",
+    "开启后，登录不校验上述 Discord 访问规则；新注册用户和绑定 Discord 时仍会校验。": "Khi bật, các quy tắc truy cập Discord ở trên sẽ bị bỏ qua khi đăng nhập. Người dùng đăng ký mới và liên kết Discord vẫn sẽ được kiểm tra.",
     "保存 Discord OAuth 设置": "Save Discord OAuth Settings",
     "保存 GitHub OAuth 设置": "Lưu cài đặt GitHub OAuth",
     "保存 Linux DO OAuth 设置": "Lưu cài đặt Linux DO OAuth",

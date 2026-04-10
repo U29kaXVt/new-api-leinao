@@ -512,6 +512,8 @@
     "侧边栏管理（全局控制）": "Barre latérale (Global)",
     "侧边栏设置保存成功": "Paramètres de la barre latérale enregistrés avec succès",
     "保存": "Enregistrer",
+    "忽略 Discord 登录校验": "Ignorer les vérifications Discord lors de la connexion",
+    "开启后，登录不校验上述 Discord 访问规则；新注册用户和绑定 Discord 时仍会校验。": "Une fois activé, les règles d'accès Discord ci-dessus sont ignorées lors de la connexion. Les nouvelles inscriptions et les liaisons Discord sont toujours vérifiées.",
     "保存 Discord OAuth 设置": "Enregistrer les paramètres OAuth Discord",
     "保存 GitHub OAuth 设置": "Enregistrer les paramètres GitHub OAuth",
     "保存 Linux DO OAuth 设置": "Enregistrer les paramètres Linux DO OAuth",

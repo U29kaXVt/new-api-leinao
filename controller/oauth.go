@@ -103,6 +103,17 @@ func HandleOAuth(c *gin.Context) {
 		return
 	}
 
+	flow := oauth.OAuthAccessFlowLogin
+	if isNewOAuthUser(provider, oauthUser) {
+		flow = oauth.OAuthAccessFlowRegister
+	}
+	if validator, ok := provider.(oauth.ConditionalAccessValidator); ok {
+		if err := validator.ValidateAccess(c.Request.Context(), token, oauthUser, flow); err != nil {
+			handleOAuthError(c, err)
+			return
+		}
+	}
+
 	// 7. Find or create user
 	user, err := findOrCreateOAuthUser(c, provider, oauthUser, session)
 	if err != nil {
@@ -149,6 +160,13 @@ func handleOAuthBind(c *gin.Context, provider oauth.Provider) {
 		return
 	}
 
+	if validator, ok := provider.(oauth.ConditionalAccessValidator); ok {
+		if err := validator.ValidateAccess(c.Request.Context(), token, oauthUser, oauth.OAuthAccessFlowBind); err != nil {
+			handleOAuthError(c, err)
+			return
+		}
+	}
+
 	// Check if this OAuth account is already bound (check both new ID and legacy ID)
 	if provider.IsUserIDTaken(oauthUser.ProviderUserID) {
 		common.ApiErrorI18n(c, i18n.MsgOAuthAlreadyBound, providerParams(provider.GetName()))
@@ -193,6 +211,20 @@ func handleOAuthBind(c *gin.Context, provider oauth.Provider) {
 	common.ApiSuccessI18n(c, i18n.MsgOAuthBindSuccess, gin.H{
 		"action": "bind",
 	})
+}
+
+func isNewOAuthUser(provider oauth.Provider, oauthUser *oauth.OAuthUser) bool {
+	if provider.IsUserIDTaken(oauthUser.ProviderUserID) {
+		return false
+	}
+
+	if legacyID, ok := oauthUser.Extra["legacy_id"].(string); ok && legacyID != "" {
+		if provider.IsUserIDTaken(legacyID) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // findOrCreateOAuthUser finds existing user or creates new user

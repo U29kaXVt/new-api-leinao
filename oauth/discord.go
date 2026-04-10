@@ -149,10 +149,6 @@ func (p *DiscordProvider) GetUserInfo(ctx context.Context, token *OAuthToken) (*
 		return nil, NewOAuthError(i18n.MsgOAuthUserInfoEmpty, map[string]any{"Provider": "Discord"})
 	}
 
-	if err := p.validateAccess(ctx, token, &discordUser); err != nil {
-		return nil, err
-	}
-
 	logger.LogDebug(ctx, "[OAuth-Discord] GetUserInfo success: uid=%s, username=%s, name=%s", discordUser.UID, discordUser.ID, discordUser.Name)
 
 	return &OAuthUser{
@@ -179,8 +175,11 @@ func (p *DiscordProvider) GetProviderPrefix() string {
 	return "discord_"
 }
 
-func (p *DiscordProvider) validateAccess(ctx context.Context, token *OAuthToken, user *discordUser) error {
+func (p *DiscordProvider) ValidateAccess(ctx context.Context, token *OAuthToken, oauthUser *OAuthUser, flow OAuthAccessFlow) error {
 	settings := system_setting.GetDiscordSettings()
+	if !settings.ShouldVerifyAccess(string(flow)) {
+		return nil
+	}
 	rules := settings.GetAccessRules()
 	if len(rules) == 0 {
 		return nil
@@ -188,12 +187,13 @@ func (p *DiscordProvider) validateAccess(ctx context.Context, token *OAuthToken,
 
 	client := http.Client{Timeout: 5 * time.Second}
 	memberMatched := false
+	userID := oauthUser.ProviderUserID
 
 	for _, rule := range rules {
 		member, err := p.getCurrentGuildMember(ctx, &client, token.AccessToken, rule.GuildID)
 		if err != nil {
 			if _, ok := err.(*discordGuildNotFoundError); ok {
-				logger.LogDebug(ctx, fmt.Sprintf("[OAuth-Discord] user %s is not in guild %s", user.UID, rule.GuildID))
+				logger.LogDebug(ctx, fmt.Sprintf("[OAuth-Discord] user %s is not in guild %s", userID, rule.GuildID))
 				continue
 			}
 			return err
@@ -201,22 +201,22 @@ func (p *DiscordProvider) validateAccess(ctx context.Context, token *OAuthToken,
 
 		memberMatched = true
 		if len(rule.RoleIDs) == 0 {
-			logger.LogDebug(ctx, fmt.Sprintf("[OAuth-Discord] access granted by guild membership: user=%s guild=%s", user.UID, rule.GuildID))
+			logger.LogDebug(ctx, fmt.Sprintf("[OAuth-Discord] access granted by guild membership: user=%s guild=%s", userID, rule.GuildID))
 			return nil
 		}
 
 		if hasAnyDiscordRole(member.Roles, rule.RoleIDs) {
-			logger.LogDebug(ctx, fmt.Sprintf("[OAuth-Discord] access granted by role match: user=%s guild=%s", user.UID, rule.GuildID))
+			logger.LogDebug(ctx, fmt.Sprintf("[OAuth-Discord] access granted by role match: user=%s guild=%s", userID, rule.GuildID))
 			return nil
 		}
 	}
 
 	if !memberMatched {
-		logger.LogWarn(ctx, fmt.Sprintf("[OAuth-Discord] access denied: user=%s is not in any allowed guild", user.UID))
+		logger.LogWarn(ctx, fmt.Sprintf("[OAuth-Discord] access denied: user=%s is not in any allowed guild", userID))
 		return NewOAuthError(i18n.MsgOAuthDiscordGuildRequired, nil)
 	}
 
-	logger.LogWarn(ctx, fmt.Sprintf("[OAuth-Discord] access denied: user=%s missing all required roles", user.UID))
+	logger.LogWarn(ctx, fmt.Sprintf("[OAuth-Discord] access denied: user=%s missing all required roles", userID))
 	return NewOAuthError(i18n.MsgOAuthDiscordRoleRequired, nil)
 }
 
