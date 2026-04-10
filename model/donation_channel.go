@@ -2,6 +2,8 @@ package model
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 )
@@ -17,6 +19,17 @@ type DonationChannelSubmission struct {
 
 func DonationChannelTag(userID int) string {
 	return fmt.Sprintf("donor_user_%d", userID)
+}
+
+func ParseDonationChannelUserID(tag string) (int, bool) {
+	if !strings.HasPrefix(tag, "donor_user_") {
+		return 0, false
+	}
+	userID, err := strconv.Atoi(strings.TrimPrefix(tag, "donor_user_"))
+	if err != nil || userID <= 0 {
+		return 0, false
+	}
+	return userID, true
 }
 
 func GetUserDonationChannels(userID int, onlyEnabled bool) ([]*Channel, error) {
@@ -36,6 +49,16 @@ func GetActiveDonationChannels() ([]*Channel, error) {
 		Where("status = ?", common.ChannelStatusEnabled).
 		Order("id desc").
 		Omit("key").
+		Find(&channels).
+		Error
+	return channels, err
+}
+
+func GetAllDonationChannels() ([]*Channel, error) {
+	var channels []*Channel
+	err := DB.
+		Where("tag LIKE ?", "donor_user_%").
+		Order("id desc").
 		Find(&channels).
 		Error
 	return channels, err

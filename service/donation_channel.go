@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 
@@ -14,7 +15,6 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
-	"gorm.io/gorm"
 )
 
 var (
@@ -26,6 +26,7 @@ var (
 )
 
 var donationChannelLocks sync.Map
+var donationDomainLocks sync.Map
 
 func getDonationChannelLock(userID int) *sync.Mutex {
 	if lock, ok := donationChannelLocks.Load(userID); ok {
@@ -33,6 +34,15 @@ func getDonationChannelLock(userID int) *sync.Mutex {
 	}
 	lock := &sync.Mutex{}
 	actual, _ := donationChannelLocks.LoadOrStore(userID, lock)
+	return actual.(*sync.Mutex)
+}
+
+func getDonationDomainLock(domainKey string) *sync.Mutex {
+	if lock, ok := donationDomainLocks.Load(domainKey); ok {
+		return lock.(*sync.Mutex)
+	}
+	lock := &sync.Mutex{}
+	actual, _ := donationDomainLocks.LoadOrStore(domainKey, lock)
 	return actual.(*sync.Mutex)
 }
 
@@ -105,13 +115,16 @@ func isBlockedDonationHostname(hostname string) bool {
 	return false
 }
 
-func buildDonationFingerprint(normalizedBaseURL string) string {
-	parsed, err := url.Parse(normalizedBaseURL)
+func buildDonationDomainKey(baseURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
 	if err != nil {
-		return hex.EncodeToString(common.Sha256Raw([]byte(normalizedBaseURL)))
+		return strings.ToLower(strings.TrimSpace(baseURL))
 	}
-	payload := strings.ToLower(parsed.Host) + "/api"
-	return hex.EncodeToString(common.Sha256Raw([]byte(payload)))
+	host := strings.ToLower(strings.TrimSpace(parsed.Host))
+	if host == "" {
+		return strings.ToLower(strings.TrimSpace(baseURL))
+	}
+	return host + "/api"
 }
 
 func buildDonationBaseURL(scheme, host string) string {
@@ -166,11 +179,19 @@ func buildDonationChannelName(username string) string {
 	return fmt.Sprintf("%s#%s", safeUsername, hex.EncodeToString(suffixBytes[:4]))
 }
 
-func cloneDonationTemplateChannel(template *model.Channel, username string, baseURL string, userID int) *model.Channel {
+func resolveDonationChannelName(username string, customName string) string {
+	trimmed := strings.TrimSpace(customName)
+	if trimmed != "" {
+		return trimmed
+	}
+	return buildDonationChannelName(username)
+}
+
+func cloneDonationTemplateChannel(template *model.Channel, username string, customName string, baseURL string, userID int) *model.Channel {
 	clone := *template
 	clone.Id = 0
 	clone.BaseURL = common.GetPointer[string](baseURL)
-	clone.Name = buildDonationChannelName(username)
+	clone.Name = resolveDonationChannelName(username, customName)
 	clone.Status = common.ChannelStatusEnabled
 	clone.SetTag(model.DonationChannelTag(userID))
 	clone.CreatedTime = common.GetTimestamp()
@@ -194,37 +215,36 @@ func donationChannelToItem(channel *model.Channel) dto.DonationChannelItem {
 	}
 }
 
-func persistDonationReward(userID int, channelID int, fingerprint string, rewardQuota int) error {
-	submission := model.DonationChannelSubmission{
-		UserID:      userID,
-		Fingerprint: fingerprint,
-		ChannelID:   channelID,
-		RewardQuota: rewardQuota,
-		CreatedTime: common.GetTimestamp(),
+func persistDonationReward(userID int, rewardQuota int) error {
+	if rewardQuota <= 0 {
+		return nil
 	}
-
-	txErr := model.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&submission).Error; err != nil {
-			return err
-		}
-		if rewardQuota <= 0 {
-			return nil
-		}
-		return tx.Model(&model.User{}).
-			Where("id = ?", userID).
-			Update("quota", gorm.Expr("quota + ?", rewardQuota)).
-			Error
-	})
-	if txErr != nil {
-		return txErr
+	if err := model.IncreaseUserQuota(userID, rewardQuota, true); err != nil {
+		return err
 	}
-
-	if rewardQuota > 0 {
-		if err := model.RefreshUserCache(userID); err != nil {
-			common.SysLog("failed to refresh donation reward user cache: " + err.Error())
-		}
+	if err := model.RefreshUserCache(userID); err != nil {
+		common.SysLog("failed to refresh donation reward user cache: " + err.Error())
 	}
 	return nil
+}
+
+func hasEnabledDonationChannelByDomainKey(domainKey string, templateChannelID int) (bool, error) {
+	channels, err := model.GetAllDonationChannels()
+	if err != nil {
+		return false, err
+	}
+	for _, channel := range channels {
+		if channel == nil || channel.Id == templateChannelID {
+			continue
+		}
+		if buildDonationDomainKey(channel.GetBaseURL()) != domainKey {
+			continue
+		}
+		if channel.Status == common.ChannelStatusEnabled {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func CreateDonationChannel(userID int, username string, req dto.CreateDonationChannelRequest) (*dto.CreateDonationChannelResponse, error) {
@@ -244,6 +264,10 @@ func CreateDonationChannel(userID int, username string, req dto.CreateDonationCh
 	if err != nil {
 		return nil, err
 	}
+	domainKey := buildDonationDomainKey(normalizedBaseURL)
+	domainLock := getDonationDomainLock(domainKey)
+	domainLock.Lock()
+	defer domainLock.Unlock()
 
 	template, err := model.GetChannelById(setting.TemplateChannelID, true)
 	if err != nil {
@@ -252,22 +276,16 @@ func CreateDonationChannel(userID int, username string, req dto.CreateDonationCh
 	if template.ChannelInfo.IsMultiKey {
 		return nil, errors.New("捐赠模板渠道不能使用多密钥模式")
 	}
-	fingerprint := buildDonationFingerprint(normalizedBaseURL)
-	exists, err := model.HasDonationFingerprint(fingerprint)
+	hasEnabledChannel, err := hasEnabledDonationChannelByDomainKey(domainKey, setting.TemplateChannelID)
 	if err != nil {
 		return nil, err
 	}
-	if exists {
+	if hasEnabledChannel {
 		return nil, ErrDonationChannelAlreadySubmitted
 	}
 
-	channel := cloneDonationTemplateChannel(template, username, normalizedBaseURL, userID)
+	channel := cloneDonationTemplateChannel(template, username, req.ChannelName, normalizedBaseURL, userID)
 	if err := channel.Insert(); err != nil {
-		return nil, err
-	}
-
-	if err := model.UpdateAbilityStatus(channel.Id, false); err != nil {
-		_ = channel.Delete()
 		return nil, err
 	}
 
@@ -277,12 +295,8 @@ func CreateDonationChannel(userID int, username string, req dto.CreateDonationCh
 		return nil, fmt.Errorf("校验捐赠渠道失败：%w", err)
 	}
 
-	if err := persistDonationReward(userID, channel.Id, fingerprint, setting.RewardQuota); err != nil {
+	if err := persistDonationReward(userID, setting.RewardQuota); err != nil {
 		_ = channel.Delete()
-		recheckExists, recheckErr := model.HasDonationFingerprint(fingerprint)
-		if recheckErr == nil && recheckExists {
-			return nil, ErrDonationChannelAlreadySubmitted
-		}
 		return nil, err
 	}
 
@@ -311,6 +325,82 @@ func GetDonationChannelItems(userID int) ([]dto.DonationChannelItem, error) {
 		item.IsMine = channel.GetTag() == userTag
 		items = append(items, item)
 	}
+	return items, nil
+}
+
+func GetDonationLeaderboardItems(userID int) ([]dto.DonationLeaderboardItem, error) {
+	channels, err := model.GetAllDonationChannels()
+	if err != nil {
+		return nil, err
+	}
+
+	type aggregate struct {
+		DonationCount  int
+		ActiveChannels int
+	}
+	userStats := make(map[int]*aggregate)
+	userIDs := make([]int, 0)
+	for _, channel := range channels {
+		if channel == nil {
+			continue
+		}
+		ownerID, ok := model.ParseDonationChannelUserID(channel.GetTag())
+		if !ok {
+			continue
+		}
+		stats, exists := userStats[ownerID]
+		if !exists {
+			stats = &aggregate{}
+			userStats[ownerID] = stats
+			userIDs = append(userIDs, ownerID)
+		}
+		stats.DonationCount++
+		if channel.Status == common.ChannelStatusEnabled {
+			stats.ActiveChannels++
+		}
+	}
+	if len(userStats) == 0 {
+		return []dto.DonationLeaderboardItem{}, nil
+	}
+
+	var users []*model.User
+	if err := model.DB.Select("id", "username", "display_name").Where("id IN ?", userIDs).Find(&users).Error; err != nil {
+		return nil, err
+	}
+	userMap := make(map[int]*model.User, len(users))
+	for _, user := range users {
+		if user == nil {
+			continue
+		}
+		userMap[user.Id] = user
+	}
+
+	items := make([]dto.DonationLeaderboardItem, 0, len(userStats))
+	for _, ownerID := range userIDs {
+		stats := userStats[ownerID]
+		user := userMap[ownerID]
+		if user == nil {
+			continue
+		}
+		items = append(items, dto.DonationLeaderboardItem{
+			UserID:         ownerID,
+			Username:       user.Username,
+			DisplayName:    user.DisplayName,
+			DonationCount:  stats.DonationCount,
+			ActiveChannels: stats.ActiveChannels,
+			IsMine:         ownerID == userID,
+		})
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].DonationCount != items[j].DonationCount {
+			return items[i].DonationCount > items[j].DonationCount
+		}
+		if items[i].ActiveChannels != items[j].ActiveChannels {
+			return items[i].ActiveChannels > items[j].ActiveChannels
+		}
+		return items[i].UserID < items[j].UserID
+	})
 	return items, nil
 }
 

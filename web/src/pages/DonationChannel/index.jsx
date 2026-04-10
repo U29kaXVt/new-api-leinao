@@ -48,6 +48,7 @@ export default function DonationChannel() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [channels, setChannels] = useState([]);
+  const [leaderboard, setLeaderboard] = useState([]);
   const [scope, setScope] = useState('all');
   const [formApi, setFormApi] = useState(null);
   const donationGuideText = statusState?.status?.donation_guide_text || '';
@@ -90,16 +91,51 @@ export default function DonationChannel() {
     [t],
   );
 
+  const leaderboardColumns = useMemo(
+    () => [
+      {
+        title: t('排名'),
+        dataIndex: 'rank',
+        render: (_, __, index) => index + 1,
+      },
+      {
+        title: t('用户'),
+        dataIndex: 'username',
+        render: (_, record) => {
+          const displayName = record.display_name?.trim();
+          if (displayName) {
+            return `${displayName} (@${record.username})`;
+          }
+          return record.username;
+        },
+      },
+      {
+        title: t('捐赠次数'),
+        dataIndex: 'donation_count',
+      },
+    ],
+    [t],
+  );
+
   const loadChannels = async () => {
     setLoading(true);
     try {
-      const res = await API.get('/api/user/donation-channel');
-      const { success, message, data } = res.data;
-      if (!success) {
-        showError(message);
+      const [channelsRes, leaderboardRes] = await Promise.all([
+        API.get('/api/user/donation-channel'),
+        API.get('/api/user/donation-channel/leaderboard'),
+      ]);
+      const channelsPayload = channelsRes.data;
+      if (!channelsPayload.success) {
+        showError(channelsPayload.message);
         return;
       }
-      setChannels(data || []);
+      const leaderboardPayload = leaderboardRes.data;
+      if (!leaderboardPayload.success) {
+        showError(leaderboardPayload.message);
+        return;
+      }
+      setChannels(channelsPayload.data || []);
+      setLeaderboard(leaderboardPayload.data || []);
     } catch (error) {
       showError(t('加载我的捐赠渠道失败'));
     } finally {
@@ -112,6 +148,7 @@ export default function DonationChannel() {
     try {
       const res = await API.post('/api/user/donation-channel', {
         base_url: values.base_url,
+        channel_name: values.channel_name,
       });
       const { success, message, data } = res.data;
       if (!success) {
@@ -203,6 +240,11 @@ export default function DonationChannel() {
               placeholder={t('请输入上游服务地址，系统会自动提取域名并固定保存为 https://域名/api')}
               rules={[{ required: true, message: t('请输入 Base URL') }]}
             />
+            <Form.Input
+              field='channel_name'
+              label={t('渠道名称')}
+              placeholder={t('可选，留空则自动命名')}
+            />
             <Button type='primary' htmlType='submit' loading={submitting}>
               {t('提交并校验')}
             </Button>
@@ -240,6 +282,16 @@ export default function DonationChannel() {
               }
             />
           </Spin>
+        </Card>
+
+        <Card title={t('捐赠榜')}>
+          <Table
+            dataSource={leaderboard}
+            columns={leaderboardColumns}
+            rowKey='user_id'
+            pagination={false}
+            empty={t('暂无捐赠记录')}
+          />
         </Card>
       </Space>
     </div>

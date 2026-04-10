@@ -51,3 +51,17 @@ func GetDonationChannels(c *gin.Context) {
 		"data":    items,
 	})
 }
+
+func GetDonationLeaderboard(c *gin.Context) {
+	items, err := service.GetDonationLeaderboardItems(c.GetInt("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    items,
+	})
+}
