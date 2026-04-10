@@ -30,6 +30,7 @@ export default function SettingsDonation(props) {
     'donation_setting.enabled': false,
     'donation_setting.template_channel_id': 0,
     'donation_setting.reward_quota': 0,
+    'donation_setting.blocked_domain_suffixes': '',
     'donation_setting.guide_text': '',
     'donation_setting.copy_button_text': '',
     'donation_setting.copy_button_content': '',
@@ -46,6 +47,8 @@ export default function SettingsDonation(props) {
       inputs['donation_setting.template_channel_id'] || 0,
     );
     const rewardQuota = Number(inputs['donation_setting.reward_quota'] || 0);
+    const blockedDomainSuffixes =
+      inputs['donation_setting.blocked_domain_suffixes'] || '';
     const guideText = inputs['donation_setting.guide_text'] || '';
     const copyButtonText = inputs['donation_setting.copy_button_text'] || '';
     const copyButtonContent =
@@ -74,6 +77,10 @@ export default function SettingsDonation(props) {
         API.put('/api/option/', {
           key: 'donation_setting.reward_quota',
           value: String(rewardQuota),
+        }),
+        API.put('/api/option/', {
+          key: 'donation_setting.blocked_domain_suffixes',
+          value: blockedDomainSuffixes,
         }),
         API.put('/api/option/', {
           key: 'donation_setting.guide_text',
@@ -108,6 +115,8 @@ export default function SettingsDonation(props) {
       'donation_setting.reward_quota': Number(
         props.options?.['donation_setting.reward_quota'] || 0,
       ),
+      'donation_setting.blocked_domain_suffixes':
+        props.options?.['donation_setting.blocked_domain_suffixes'] || '',
       'donation_setting.guide_text':
         props.options?.['donation_setting.guide_text'] || '',
       'donation_setting.copy_button_text':
@@ -132,7 +141,7 @@ export default function SettingsDonation(props) {
             style={{ marginBottom: 16, display: 'block' }}
           >
             {t(
-              '普通用户提交 base_url 和 key 后，系统会基于模板渠道克隆出专属捐赠渠道，仅用于调用资格校验，不参与全局选路。',
+              '普通用户提交 URL 后，系统会自动提取主机名并固定保存为 https://域名/api，再基于模板渠道克隆出专属捐赠渠道，仅用于调用资格校验，不参与全局选路。',
             )}
           </Typography.Text>
           <Row gutter={16}>
@@ -163,6 +172,19 @@ export default function SettingsDonation(props) {
                 min={0}
                 placeholder={t('捐赠校验成功后发放的一次性额度')}
                 onChange={handleFieldChange('donation_setting.reward_quota')}
+              />
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={24}>
+              <Form.TextArea
+                field='donation_setting.blocked_domain_suffixes'
+                label={t('不允许使用的域名后缀')}
+                placeholder={t('可按行或逗号分隔，例如：.replit.dev')}
+                autosize
+                onChange={handleFieldChange(
+                  'donation_setting.blocked_domain_suffixes',
+                )}
               />
             </Col>
           </Row>

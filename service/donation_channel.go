@@ -50,21 +50,58 @@ func normalizeDonationBaseURL(raw string) (string, error) {
 	if parsed.Host == "" {
 		return "", errors.New("base_url 缺少主机名")
 	}
-	parsed.Scheme = strings.ToLower(parsed.Scheme)
-	parsed.Host = strings.ToLower(parsed.Host)
-	parsed.Fragment = ""
-	if parsed.RawQuery != "" {
-		values, err := url.ParseQuery(parsed.RawQuery)
-		if err == nil {
-			parsed.RawQuery = values.Encode()
+
+	hostname := strings.ToLower(strings.TrimSpace(parsed.Hostname()))
+	if hostname == "" {
+		return "", errors.New("base_url 缺少主机名")
+	}
+	if isBlockedDonationHostname(hostname) {
+		return "", errors.New("该域名后缀不允许用于捐赠渠道")
+	}
+
+	return (&url.URL{
+		Scheme: "https",
+		Host:   hostname,
+		Path:   "/api",
+	}).String(), nil
+}
+
+func parseDonationBlockedDomainSuffixes() []string {
+	raw := strings.TrimSpace(operation_setting.GetDonationSetting().BlockedDomainSuffixes)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == '\n' || r == '\r' || r == ';'
+	})
+	suffixes := make([]string, 0, len(parts))
+	for _, part := range parts {
+		suffix := strings.ToLower(strings.TrimSpace(part))
+		if suffix == "" {
+			continue
+		}
+		suffixes = append(suffixes, suffix)
+	}
+	return suffixes
+}
+
+func hostnameMatchesBlockedSuffix(hostname string, suffix string) bool {
+	if hostname == "" || suffix == "" {
+		return false
+	}
+	if strings.HasPrefix(suffix, ".") {
+		return strings.HasSuffix(hostname, suffix)
+	}
+	return hostname == suffix || strings.HasSuffix(hostname, "."+suffix)
+}
+
+func isBlockedDonationHostname(hostname string) bool {
+	for _, suffix := range parseDonationBlockedDomainSuffixes() {
+		if hostnameMatchesBlockedSuffix(hostname, suffix) {
+			return true
 		}
 	}
-	if parsed.Path == "/" {
-		parsed.Path = ""
-	} else {
-		parsed.Path = strings.TrimRight(parsed.Path, "/")
-	}
-	return parsed.String(), nil
+	return false
 }
 
 func buildDonationFingerprint(normalizedBaseURL string) string {

@@ -200,7 +200,7 @@ export default function DonationChannel() {
             <Form.Input
               field='base_url'
               label={t('Base URL')}
-              placeholder={t('请输入上游服务的 Base URL')}
+              placeholder={t('请输入上游服务地址，系统会自动提取域名并固定保存为 https://域名/api')}
               rules={[{ required: true, message: t('请输入 Base URL') }]}
             />
             <Button type='primary' htmlType='submit' loading={submitting}>

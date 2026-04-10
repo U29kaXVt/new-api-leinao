@@ -206,3 +206,19 @@ func TestGetDonationChannelItems(t *testing.T) {
 	assert.True(t, items[1].IsMine)
 	assert.Equal(t, "mine-enabled", items[1].Name)
 }
+
+func TestNormalizeDonationBaseURL(t *testing.T) {
+	originalSetting := *operation_setting.GetDonationSetting()
+	t.Cleanup(func() {
+		*operation_setting.GetDonationSetting() = originalSetting
+	})
+
+	operation_setting.GetDonationSetting().BlockedDomainSuffixes = ".blocked.dev"
+
+	normalized, err := normalizeDonationBaseURL("http://Srk.Replit.Dev/asqd/aa?foo=bar")
+	require.NoError(t, err)
+	assert.Equal(t, "https://srk.replit.dev/api", normalized)
+
+	_, err = normalizeDonationBaseURL("https://demo.blocked.dev/path")
+	require.EqualError(t, err, "该域名后缀不允许用于捐赠渠道")
+}
